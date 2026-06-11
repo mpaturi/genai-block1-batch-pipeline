@@ -1,336 +1,158 @@
-- Related spec: docs/spec.md
-- Scope: Block 1 (local batch pipeline)
-- Future work: Block 2 (S3/Glue), Block 3+ (RAG, agents)
+# Block 1 Plan
+
+## Objective
+
+Implement the initial local version of a Python/PySpark batch pipeline over a synthetic OMOP-style healthcare dataset.
+
+This block is about creating a strong foundation:
+- project structure
+- reproducible setup
+- synthetic data generation
+- validation and transformation modules
+- a runnable batch entry point
+- test coverage for basic rules
+
+## Architecture overview
+
+The Block 1 flow will be:
+
+1. Generate synthetic OMOP-style tables with Python.
+2. Save those tables to `data/raw/`.
+3. Read raw tables into PySpark using explicit schemas.
+4. Validate key constraints and basic business rules.
+5. Clean and standardize datatypes and date fields.
+6. Build a person-level analytic dataset.
+7. Write the final dataset to `data/processed/`.
+8. Demonstrate the output in a Jupyter notebook.
+
+## Planned modules
 
-# Block 1 – Technical Plan
+### `src/config.py`
+Holds project paths, file names, row-count settings, and simple configuration constants.
 
-## Overview
-
-This project will implement a local PySpark batch pipeline over the
-Synthea OMOP dataset. The initial version will read local raw files,
-clean and validate core tables, derive age-based features, compute
-summary analytics, and write processed outputs to disk.
-
-The design should make it easy to switch the data source from local
-files to S3 / AWS Glue in Block 2 without rewriting the full pipeline.
-
-## Objectives
-
-- Build a reproducible batch pipeline using PySpark.
-- Practice spec-driven development: spec -> plan -> tasks -> implementation.
-- Separate configuration, validation, transformation, and output logic.
-- Add basic tests for validation logic and pipeline smoke behavior.
-- Keep the code modular enough to support cloud migration later.
-
-## Input Data
-
-The pipeline is expected to work with these OMOP tables:
-
-- `person`
-- `visit_occurrence`
-- `condition_occurrence`
-
-For Block 1, input files will live under `data/raw/` and may be:
-
-- `person.csv.lzo`
-- `visit_occurrence.csv.lzo`
-- `condition_occurrence.csv.lzo`
-
-If only one file is available initially, development can begin with that
-table and stubbed interfaces for the other two.
-
-## Output Data
-
-The pipeline will write outputs under `data/processed/`.
-
-Planned outputs:
-
-- `visits_by_age_band/`
-- `top_conditions_by_age_band/`
-- `validation_report.json`
-- optional log file under `logs/`
-
-Output format may begin as CSV or Parquet depending on what is easiest
-to support locally in PySpark.
-
-## Architecture
-
-The project will use a small modular structure:
-
-```text
-src/
-  config.py
-  pipeline.py
-  io.py
-  transform.py
-  validation.py
-  logging_utils.py
-tests/
-  test_validation.py
-  test_transform.py
-  test_pipeline_smoke.py
-docs/
-  spec.md
-  plan.md
-  tasks.md
-data/
-  raw/
-  processed/
-logs/
-```
-
-### Module responsibilities
-
-#### `src/config.py`
-Contains runtime configuration such as:
-
-- input paths
-- output paths
-- file names
-- age band definitions
-- validation thresholds
-- run mode flags (local now, S3 later)
-
-This file should centralize settings so the rest of the code does not
-hardcode paths.
-
-#### `src/io.py`
-Responsible for reading and writing data.
-
-Planned functions:
-
-- `create_spark_session()`
-- `read_person(spark, path)`
-- `read_visit_occurrence(spark, path)`
-- `read_condition_occurrence(spark, path)`
-- `write_dataframe(df, path, format, partition_cols=None)`
-
-This module isolates data access from business logic.
-
-#### `src/transform.py`
-Responsible for cleaning and feature engineering.
-
-Planned functions:
-
-- `normalize_columns(df)`
-- `cast_person_types(df)`
-- `cast_visit_types(df)`
-- `cast_condition_types(df)`
-- `derive_age_band_from_year(year_col, birth_year_col)`
-- `build_visits_by_age_band(person_df, visit_df)`
-- `build_top_conditions_by_age_band(person_df, condition_df)`
-
-This module should contain the main transformation logic and keep it
-testable.
-
-#### `src/validation.py`
-Responsible for data quality checks.
-
-Planned functions:
-
-- `check_required_columns(df, expected_columns)`
-- `check_non_null(df, columns)`
-- `check_age_range(df, age_column, min_age=0, max_age=115)`
-- `build_validation_report(results)`
-- `has_blocking_failures(results, threshold_config)`
-
-Validation output should be structured so it can be logged and written
-to a JSON report.
-
-#### `src/logging_utils.py`
-Responsible for logging setup and helper methods.
-
-Planned functions:
-
-- `configure_logging()`
-- `log_row_count(name, df)`
-- `log_validation_summary(results)`
-- `log_runtime(start_time, end_time)`
-
-#### `src/pipeline.py`
-The orchestration entrypoint.
-
-Planned flow:
-
-1. Load config.
-2. Configure logging.
-3. Create SparkSession.
-4. Read input tables.
-5. Normalize and cast data.
-6. Derive features.
-7. Run validation checks.
-8. Stop if blocking failures occur.
-9. Compute summary outputs.
-10. Write outputs.
-11. Log completion metrics.
-
-This file should be thin and readable; most logic should live in
-supporting modules.
-
-## Execution Flow
-
-The intended command is:
-
-```bash
-python -m src.pipeline
-```
-
-Expected runtime sequence:
-
-1. Start pipeline.
-2. Load config and initialize Spark.
-3. Read raw OMOP tables from `data/raw/`.
-4. Apply cleaning and casting.
-5. Derive age-related fields and age bands.
-6. Run validation.
-7. If validation fails:
-   - write `validation_report.json`
-   - log failure
-   - exit non-zero
-8. If validation passes:
-   - compute summary tables
-   - write processed outputs
-   - log success and runtime
-
-## Transformation Plan
-
-### Person table
-Use `person` to provide demographic fields and birth year.
-
-Planned steps:
-
-- normalize column names
-- cast `person_id` and concept IDs to numeric types where possible
-- cast `year_of_birth` to integer
-- retain only fields needed for Block 1
-
-### Visit occurrence table
-Use `visit_occurrence` to compute utilization.
-
-Planned steps:
-
-- parse `visit_start_date`
-- derive `visit_year`
-- join with `person` on `person_id`
-- compute age at visit using `visit_year - year_of_birth`
-- map age to age band
-- aggregate visits by patient, year, and age band
-- aggregate again to summary metrics
-
-### Condition occurrence table
-Use `condition_occurrence` to compute top conditions by age band.
-
-Planned steps:
-
-- parse `condition_start_date`
-- derive event year if needed
-- join with `person` on `person_id`
-- compute age band
-- aggregate distinct patients by `(age_band, condition_concept_id)`
-- rank within each age band
-
-## Validation Plan
-
-Validation rules for v1:
-
-- required table-level columns must exist
-- key identifiers must not be null:
-  - `person_id`
-  - `visit_occurrence_id`
-  - `condition_occurrence_id`
-- required dates must be parseable and non-null:
-  - `visit_start_date`
-  - `condition_start_date`
-- derived age must be within 0 to 115
-- row counts should be logged before and after cleaning
-
-Validation report shape:
-
-- rule name
-- table name
-- failed row count
-- failure percentage
-- blocking vs non-blocking
-- notes / sample message
-
-## Testing Plan
-
-Testing for Block 1 will be intentionally lightweight but real.
-
-### Unit tests
-`tests/test_validation.py`
-
-- null-check logic
-- age-range check
-- required-column detection
-
-`tests/test_transform.py`
-
-- age-band mapping
-- basic transformation logic on tiny in-memory DataFrames
-
-### Smoke test
-`tests/test_pipeline_smoke.py`
-
-- create minimal sample data
-- run the pipeline or major pipeline functions
-- verify outputs are created and not empty
-
-The goal is not perfect coverage; the goal is to practice real software
-engineering habits and make refactoring safer.
-
-## Logging and Observability
-
-Logging should include:
-
-- pipeline start and end
-- input row counts
-- output row counts
-- validation failures
-- total runtime
-- paths used for input and output
-
-If practical, logs should go both to console and to a file under `logs/`.
-
-## Migration Path to Block 2
-
-This Block 1 design should support a later move to AWS by minimizing
-hardcoded local assumptions.
-
-Planned migration-friendly choices:
-
-- all file paths live in `config.py`
-- I/O functions are isolated in `io.py`
-- transformation logic does not depend on local file system details
-- outputs use formats that Glue/Spark can also read later
-
-In Block 2, likely changes will be:
-
-- replace local paths with S3 URIs
-- add Glue-compatible execution
-- add cloud-oriented logging and partition strategy
-
-## Risks and Simplifications
-
-### Risks
-- local Spark + Windows environment issues
-- compressed `.lzo` handling may require extra setup
-- incomplete local sample files early in development
-
-### Simplifications
-- begin with one table if needed and scaffold the others
-- use documented OMOP schema assumptions before full inspection
-- use simple age approximation from event year minus birth year
-- defer vocabulary joins and advanced healthcare semantics
-
-## Definition of Done
+### `src/schemas.py`
+Defines the Spark schemas for:
+- PERSON
+- VISIT_OCCURRENCE
+- CONDITION_OCCURRENCE
+- DRUG_EXPOSURE
+- MEASUREMENT
+
+### `src/generator.py`
+Contains synthetic data generation logic for all Block 1 tables.
+
+Responsibilities:
+- generate synthetic patients
+- generate visits per patient
+- generate conditions, drugs, and measurements tied to persons and visits
+- keep generation reproducible using a random seed
+
+### `src/io_utils.py`
+Handles reading and writing local CSV or Parquet files.
+
+Responsibilities:
+- write generated raw files
+- read raw files into Spark DataFrames
+- write processed outputs
+
+### `src/validations.py`
+Contains validation checks and helper functions.
+
+Initial checks:
+- event `person_id` values exist in PERSON
+- optional `visit_occurrence_id` values exist in VISIT_OCCURRENCE
+- start/end dates are logically ordered
+- required columns are non-null where expected
+
+### `src/transforms.py`
+Contains transformation and aggregation logic.
+
+Initial responsibilities:
+- clean nulls and cast types
+- standardize date fields
+- compute visit counts by person
+- derive chronic condition flags
+- compute latest selected measurement values
+- assemble final `analytic_person` output
+
+### `src/pipeline.py`
+Coordinates the full pipeline.
+
+Responsibilities:
+- read source data
+- run validation steps
+- run transformations
+- write final output
+
+### `src/main.py`
+Command-line entry point to run the pipeline locally.
+
+## Data design plan
+
+The synthetic dataset will intentionally model a small subset of OMOP’s patient-centric structure, where event tables reference the PERSON table through `person_id`. [web:16][web:29]
+
+Design priorities for Block 1:
+- clear relationships
+- deterministic generation
+- realistic-enough distributions
+- simple concept sets
+- small enough to run locally but large enough to feel realistic
+
+Initial generation approach:
+- create PERSON first
+- create VISIT_OCCURRENCE next
+- create CONDITION_OCCURRENCE, DRUG_EXPOSURE, and MEASUREMENT from persons and visits
+- preserve referential integrity during generation rather than trying to repair it later
+
+## Testing plan
+
+Testing will use `pytest`, with reusable fixtures defined in `conftest.py`, which is the standard pytest mechanism for sharing fixtures across tests. [web:34]
+
+Testing layers:
+1. Pure Python unit tests for helper logic.
+2. Small Spark DataFrame tests for validations and transformations.
+3. One smoke test for end-to-end pipeline execution on very small sample data.
+
+PySpark testing guidance from Apache Spark supports creating reusable Spark test sessions and validating DataFrame-level logic in tests. [web:33]
+
+## Notebook plan
+
+`notebooks/block1_demo.ipynb` will:
+- explain the project briefly
+- load the analytic output
+- show row counts and schema
+- run simple analysis such as visit counts by age band
+- show at least one simple plot
+
+The notebook is for demonstration, not for production logic. Core pipeline code should remain in `src/`. [cite:1]
+
+## Block boundaries
+
+### Included in Block 1
+- local synthetic OMOP-style data generation
+- local raw and processed storage
+- basic PySpark validation and transformation logic
+- one person-level analytic dataset
+- initial tests
+- notebook demo
+- concise documentation
+
+### Deferred to later blocks
+- more OMOP tables
+- larger data volume
+- partitioning strategy
+- Spark performance tuning
+- orchestration and scheduling
+- cloud storage and production deployment
+- vocabulary mapping and richer healthcare semantics
+- data quality dashboards and monitoring
+
+## Completion criteria
 
 This plan is complete when:
-
-- the repo structure exists
-- all planned modules exist, even if partially stubbed at first
-- a single command runs the pipeline
-- validation and aggregation are implemented
-- outputs are written successfully
-- at least basic tests pass
-- docs (`spec.md`, `plan.md`, `tasks.md`, `README.md`) are present
+- the repository structure exists
+- generator code creates all Block 1 raw datasets
+- a single pipeline command produces a person-level output dataset
+- key validations are implemented
+- initial tests pass
+- docs and README reflect the actual implementation

@@ -1,83 +1,75 @@
-# GenAI Block 1 Batch Pipeline
+# Synthetic OMOP-Style Healthcare Batch Pipeline
 
-A Python/PySpark batch data pipeline project for processing person-level data and building a clean, testable analytics workflow. This repository is being developed in stages, with Block 1 focused on project setup, documentation, and initial pipeline scaffolding.
+A Python/PySpark batch pipeline project built on a fully synthetic OMOP-style healthcare dataset. The goal of Block 1 is to establish a clean, testable, and interview-ready foundation for a healthcare data pipeline using a simplified subset of OMOP-like tables. 
 
-## Overview
+## Current scope
 
-The goal of this project is to build a reproducible batch processing pipeline using Python and PySpark, supported by tests and clear project documentation. The repository is structured to separate reusable source code, tests, notebooks, and planning documents.
+Block 1 includes:
+- project documentation (`spec.md`, `plan.md`, `tasks.md`)
+- synthetic OMOP-style data design
+- local synthetic data generation
+- a basic PySpark batch pipeline
+- initial tests with `pytest`
+- a demo notebook
 
-## Current Scope
+Block 1 does not yet include:
+- large-scale performance tuning
+- orchestration
+- cloud deployment
+- full OMOP vocabulary mapping
+- advanced healthcare semantics
 
-Block 1 currently includes:
-- project scaffold
-- setup documentation
-- software design documents
-- Python environment configuration
-- dependency tracking with `requirements.txt`
-
-## Tech Stack
+## Tech stack
 
 - Python
 - PySpark
 - pytest
-- Jupyter Notebook
-- Git / GitHub
+- Jupyter Notebook or JupyterLab
 
-## Project Structure
+## Project structure
 
 ```text
-genai-block1-batch-pipeline/
-├── docs/
-├── data/
-├── notebooks/
-├── src/
-├── tests/
-├── scripts/
-├── requirements.txt
-├── .gitignore
-└── README.md
+docs/        project specification, plan, and tasks
+src/         pipeline modules and helper code
+tests/       pytest-based tests
+notebooks/   demo notebook for Block 1
+scripts/     utility scripts and wrappers
+data/raw/    local raw synthetic data (git-ignored)
+data/processed/ local processed outputs (git-ignored)
 ```
 
 ## Setup
 
-Create and activate the virtual environment:
+1. Create and activate a virtual environment.
+2. Install dependencies from `requirements.txt`.
+3. Generate synthetic raw data.
+4. Run the PySpark pipeline.
+5. Run tests.
+6. Open the notebook demo.
 
-```powershell
+Example setup:
+
+```bash
 python -m venv myenv
-.\myenv\Scripts\Activate.ps1
-```
-
-Install dependencies:
-
-```powershell
+source myenv/bin/activate
 pip install -r requirements.txt
 ```
 
-## How to Run
+## Planned commands
 
-Launch Jupyter Notebook:
+Examples of planned local commands:
 
-```powershell
+```bash
+python scripts/generate_data.py
+python -m src.main
+pytest
 jupyter notebook
 ```
 
-Run tests:
+## Data note
 
-```powershell
-pytest
-```
-
-## Documentation
-
-Project planning and design documents are located in the `docs/` folder.
-
-## Next Steps
-
-- implement initial PySpark pipeline logic
-- add notebook-based demonstration
-- expand unit tests
-- add sample input/output workflow
+This project uses synthetic OMOP-style healthcare data only. Bulk generated data is stored locally and is not committed to version control.
 
 ## Status
 
-Pending mentor review and approval before the next implementation phase.
+Block 1 is focused on foundation and structure first. Later blocks may expand the schema, increase scale, and introduce more advanced engineering concerns.
