@@ -1,0 +1,34 @@
+# Virtual environment
+myenv/
+.venv/
+env/
+venv/
+ENV/
+
+# Python cache / compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code and editor settings
+.vscode/
+.idea/
+
+# Logs
+logs/
+*.log
+
+# Local data (keep these out of git)
+data/raw/
+data/processed/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment / secrets (if you add them later)
+.env
+*.env
