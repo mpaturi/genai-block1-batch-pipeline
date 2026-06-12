@@ -26,9 +26,9 @@ Block 1 does not focus on:
 
 ## Problem statement
 
-Healthcare datasets are often modeled in a patient-centric way, where a central PERSON table is linked to clinical event tables such as visits, conditions, medications, and measurements. The OMOP Common Data Model follows this pattern, with clinical events linked back to PERSON through `person_id`. [web:16][web:29]
+Healthcare datasets are often modeled in a patient-centric way, where a central PERSON table is linked to clinical event tables such as visits, conditions, medications, and measurements. The OMOP Common Data Model follows this pattern, with clinical events linked back to PERSON through `person_id`. 
 
-This project will build a simplified OMOP-style batch pipeline using synthetic data only. The goal is to create a realistic, interview-worthy foundation that demonstrates data engineering practices without relying on real patient data. [cite:12]
+This project will build a simplified OMOP-style batch pipeline using synthetic data only. The goal is to create a realistic, interview-worthy foundation that demonstrates data engineering practices without relying on real patient data. 
 
 ## Dataset
 
@@ -48,7 +48,7 @@ Columns:
 
 ### 2. VISIT_OCCURRENCE
 
-Represents encounters such as outpatient, inpatient, or emergency visits. OMOP defines visit occurrences as spans of time during which a person receives healthcare services in a setting. [web:29]
+Represents encounters such as outpatient, inpatient, or emergency visits. OMOP defines visit occurrences as spans of time during which a person receives healthcare services in a setting. 
 
 Columns:
 - `visit_occurrence_id` (int) — unique visit identifier
@@ -86,7 +86,7 @@ Columns:
 
 ### 5. MEASUREMENT
 
-Represents labs and vitals. In OMOP, measurement records include numeric results tied to a person and optionally to a visit. [web:16]
+Represents labs and vitals. In OMOP, measurement records include numeric results tied to a person and optionally to a visit.
 
 Columns:
 - `measurement_id` (int)
@@ -96,6 +96,17 @@ Columns:
 - `value_as_number` (double)
 - `unit_concept_id` (int, nullable)
 - `visit_occurrence_id` (int, nullable)
+
+### 6. NOTE
+
+Synthetic clinical note text.
+
+Columns:
+- `note_id` (int) — unique note identifier
+- `person_id` (int) — foreign key to PERSON
+- `note_date` (date)
+- `note_text` (string)
+- `visit_occurrence_id` (int, nullable) — foreign key to VISIT_OCCURRENCE
 
 ## Relationships
 
@@ -109,6 +120,18 @@ Key integrity expectations:
 - if `visit_occurrence_id` is populated, it must map to a valid visit
 - date ranges must be logically ordered
 
+## Data Lineage
+
+Synthea Source Data
+        ↓
+Raw OMOP-style Tables
+        ↓
+Validation
+        ↓
+Transformations
+        ↓
+analytic_person
+
 ## Storage plan
 
 Local data layout:
@@ -116,11 +139,17 @@ Local data layout:
 - processed outputs: `data/processed/`
 - optional tiny sample data for tests: `data/sample/`
 
-The `data/raw/` and `data/processed/` directories are git-ignored so no bulk synthetic data is committed to source control. Only generator code, schemas, and tiny test samples may live in git. [cite:13]
+The `data/raw/` and `data/processed/` directories are git-ignored so no bulk synthetic data is committed to source control. Only generator code, schemas, and tiny test samples may live in git. 
 
 ## Synthetic data assumptions
 
-All data in this project is fully synthetic and de-identified by design.
+All data in this project is fully synthetic and de-identified by design. Primary synthetic data source is Synthea. 
+
+Raw Synthea outputs are transformed into a simplified OMOP-style model
+used throughout the project.
+
+Where needed, additional synthetic records may be generated to support
+testing or scale experiments. 
 
 Generation rules will aim for internal consistency and basic realism, not medical completeness. Initial rules include:
 - realistic age distribution from `year_of_birth`
@@ -158,7 +187,7 @@ Planned columns:
 - `latest_measurement_date`
 
 Initial derivation ideas:
-- age derived from current year minus `year_of_birth`
+- age derived using a fixed reference date (e.g., 2025-01-01) to ensure reproducible outputs.
 - visit counts aggregated from `VISIT_OCCURRENCE`
 - chronic condition flags derived from `CONDITION_OCCURRENCE`
 - latest measurements derived using most recent `measurement_date`
@@ -175,13 +204,51 @@ Block 1 must:
 7. Write processed output to `data/processed/`.
 8. Include tests for key constraints and transformation logic.
 9. Include a notebook demo that loads and explores the final analytic output.
+10. Capture and log pipeline operational metrics:
+        - raw row counts(before cleaning and after cleaning)
+        - processed row counts
+        - validation failures
+        - total runtime duration
+        - validation duration
+        - transformation duration
+11. The entire Block 1 workflow must execute from a single command.
+Example flow:
+        Generate Data
+        → Validate Data
+        → Transform Data
+        → Build analytic_person
+        → Write Processed Output
+        → Write Pipeline Metrics
+12. Processed output must be written as partitioned Parquet.
+Example:
+analytic_person/
+    year_of_birth_band=1940s/
+    year_of_birth_band=1950s/
+13. Validation failures must fail the pipeline and prevent output creation.
+Validation categories:
+        - null checks
+        - datatype checks
+        - value-range checks
+        - referential integrity checks
 
 ## Success criteria
-
 Block 1 is complete when:
-- docs are present and aligned with implementation
-- raw synthetic data can be generated locally
-- the PySpark pipeline runs end-to-end
-- the person-level analytic dataset is created successfully
-- tests pass on sample data
-- the notebook demo can load and inspect the processed output
+* docs are present and aligned with implementation
+* the solution is implemented using Python and PySpark
+* raw synthetic data can be generated locally
+* the PySpark pipeline runs end-to-end
+* the pipeline executes from a single command
+* the person-level analytic dataset is created successfully
+* processed output passes schema validation checks
+* null, datatype, range and referential integrity validations pass
+* validation failures prevent output creation and fail the pipeline
+* at least one join is implemented in the pipeline
+* at least one aggregation is implemented in the pipeline
+* processed output is written as partitioned Parquet
+* before-cleaning and after-cleaning row counts are logged
+* runtime metrics are captured
+* pipeline metrics are logged and reviewable
+* tests pass on sample data
+* the notebook demo can load and inspect the processed output
+* README contains a pipeline architecture diagram
+* pipeline produces identical output when re-run with the same seed and reference date

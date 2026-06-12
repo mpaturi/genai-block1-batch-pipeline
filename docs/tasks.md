@@ -27,6 +27,7 @@
 - [ ] Finalize exact column lists for CONDITION_OCCURRENCE
 - [ ] Finalize exact column lists for DRUG_EXPOSURE
 - [ ] Finalize exact column lists for MEASUREMENT
+- [ ] Finalize exact column lists for NOTE
 - [ ] Define datatypes for all columns
 - [ ] Define concept ID sets for visit types, conditions, drugs, and measurements
 - [ ] Define generation rules for demographics
@@ -34,7 +35,7 @@
 - [ ] Define generation rules for chronic conditions
 - [ ] Define generation rules for drug exposures
 - [ ] Define generation rules for measurements and realistic ranges
-- [ ] Decide initial output format: CSV or Parquet
+- [ ] Finalize Parquet as the processed output format
 
 ## Data generation
 
@@ -43,6 +44,7 @@
 - [ ] Implement CONDITION_OCCURRENCE generator
 - [ ] Implement DRUG_EXPOSURE generator
 - [ ] Implement MEASUREMENT generator
+- [ ] Implement NOTE generator
 - [ ] Add deterministic seed support
 - [ ] Write generated tables to `data/raw/`
 - [ ] Verify row counts and key uniqueness
@@ -59,6 +61,7 @@
 - [ ] Implement visit aggregations by person
 - [ ] Implement condition-based flags
 - [ ] Implement latest-measurement logic
+- [ ] Generate pipeline quality report
 - [ ] Build final `analytic_person` dataset
 - [ ] Write final output to `data/processed/`
 
