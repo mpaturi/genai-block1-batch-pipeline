@@ -34,16 +34,21 @@ src/         pipeline modules and helper code
 tests/       pytest-based tests
 notebooks/   demo notebook for Block 1
 scripts/     utility scripts and wrappers
+data/synthea_raw/ local raw Synthea export (git-ignored)
 data/raw/    local raw synthetic data (git-ignored)
 data/processed/ local processed outputs (git-ignored)
 ```
 
 ## Setup
 
+Prerequisites:
+- Python 3.11+
+- Java 11+ (required once, to run Synthea and produce the raw patient export)
+
 1. Create and activate a virtual environment.
 2. Install dependencies from `requirements.txt`.
-3. Generate synthetic raw data.
-4. Run the PySpark pipeline.
+3. Run Synthea (via `scripts/run_synthea.ps1`) to generate a raw patient export into `data/synthea_raw/`.
+4. Run the Block 1 pipeline — generates the simplified `data/raw/` tables from the Synthea export, validates, cleans, transforms, and writes `data/processed/`.
 5. Run tests.
 6. Open the notebook demo.
 
@@ -60,8 +65,8 @@ pip install -r requirements.txt
 Examples of planned local commands:
 
 ```bash
-python scripts/generate_data.py
-python -m src.main
+./scripts/run_synthea.ps1     # one-time: generate data/synthea_raw/ (requires Java)
+python -m src.main             # generate data/raw/, validate, clean, transform, write data/processed/
 pytest
 jupyter notebook
 ```
