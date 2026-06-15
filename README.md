@@ -34,9 +34,10 @@ src/         pipeline modules and helper code
 tests/       pytest-based tests
 notebooks/   demo notebook for Block 1
 scripts/     utility scripts and wrappers
-data/synthea_raw/ local raw Synthea export (git-ignored)
+data/synthea_raw/ local raw Synthea export: csv/ + fhir/ (git-ignored)
 data/raw/    local raw synthetic data (git-ignored)
 data/processed/ local processed outputs (git-ignored)
+data/sample/ tiny fixtures for tests (committed)
 ```
 
 ## Setup
@@ -48,7 +49,7 @@ Prerequisites:
 1. Create and activate a virtual environment.
 2. Install dependencies from `requirements.txt`.
 3. Download `synthea-with-dependencies.jar` from the [Synthea releases page](https://github.com/synthetichealth/synthea/releases/latest) and place it at `tools/synthea-with-dependencies.jar` (git-ignored).
-4. Run Synthea (via `scripts/run_synthea.ps1`) to generate a raw patient export into `data/synthea_raw/`.
+4. Run Synthea (via `scripts/run_synthea.ps1`) to generate a raw patient export — both CSV and FHIR — into `data/synthea_raw/`. The FHIR export is the source for NOTE text (see `docs/spec.md`).
 5. Run the Block 1 pipeline — generates the simplified `data/raw/` tables from the Synthea export, validates, cleans, transforms, and writes `data/processed/`.
 6. Run tests.
 7. Open the notebook demo.
@@ -66,7 +67,12 @@ pip install -r requirements.txt
 Examples of planned local commands:
 
 ```bash
-./scripts/run_synthea.ps1     # one-time: generate data/synthea_raw/ (requires Java)
+./scripts/run_synthea.ps1 -Population 10000 -Seed 42 -ReferenceDate 20250101
+# one-time: generate data/synthea_raw/{csv,fhir}/ (requires Java).
+# These defaults match src/config.py (NUM_PERSONS, RANDOM_SEED, REFERENCE_DATE),
+# so the export is reproducible; the same flags are also the defaults for
+# scripts/run_synthea.ps1, so a bare `./scripts/run_synthea.ps1` is equivalent.
+
 python -m src.main             # generate data/raw/, validate, clean, transform, write data/processed/
 pytest
 jupyter notebook
