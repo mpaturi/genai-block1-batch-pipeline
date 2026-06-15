@@ -21,10 +21,10 @@ __pycache__/
 logs/
 *.log
 
-# Local data (keep these out of git)
-data/synthea_raw/
-data/raw/
-data/processed/
+# Local data (keep these out of git; tiny test fixtures in data/sample/ are committed)
+data/*
+!data/sample/
+!data/sample/**
 
 # OS files
 .DS_Store
