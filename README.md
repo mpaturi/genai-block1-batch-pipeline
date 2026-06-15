@@ -47,10 +47,11 @@ Prerequisites:
 
 1. Create and activate a virtual environment.
 2. Install dependencies from `requirements.txt`.
-3. Run Synthea (via `scripts/run_synthea.ps1`) to generate a raw patient export into `data/synthea_raw/`.
-4. Run the Block 1 pipeline — generates the simplified `data/raw/` tables from the Synthea export, validates, cleans, transforms, and writes `data/processed/`.
-5. Run tests.
-6. Open the notebook demo.
+3. Download `synthea-with-dependencies.jar` from the [Synthea releases page](https://github.com/synthetichealth/synthea/releases/latest) and place it at `tools/synthea-with-dependencies.jar` (git-ignored).
+4. Run Synthea (via `scripts/run_synthea.ps1`) to generate a raw patient export into `data/synthea_raw/`.
+5. Run the Block 1 pipeline — generates the simplified `data/raw/` tables from the Synthea export, validates, cleans, transforms, and writes `data/processed/`.
+6. Run tests.
+7. Open the notebook demo.
 
 Example setup:
 
