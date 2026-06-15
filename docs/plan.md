@@ -16,14 +16,19 @@ This block is about creating a strong foundation:
 
 The Block 1 flow will be:
 
-1. Generate source healthcare data using Synthea and transform selected outputs into simplified OMOP-style tables.
-2. Save those tables to `data/raw/`.
-3. Read raw tables into PySpark using explicit schemas.
-4. Validate key constraints and basic business rules.
-5. Clean and standardize datatypes and date fields.
+0. Run the Synthea CLI (Java) locally to generate a raw patient population into `data/synthea_raw/`.
+1. Map selected Synthea outputs into the simplified OMOP-style tables using `src/concepts.py` concept dictionaries, generate NOTE text via templates, inject a small share of intentionally dirty rows, and write the result to `data/raw/`.
+2. Read raw tables into PySpark using explicit schemas.
+3. Run validation checks on raw data to detect dirty rows (null/datatype/range/referential-integrity/date-order).
+4. Clean (drop/quarantine) the detected rows, logging before/after row counts; standardize datatypes and date fields.
+5. Re-run validation on the cleaned data as a hard gate — abort if issues remain.
 6. Build a person-level analytic dataset.
-7. Write the final dataset to `data/processed/`.
+7. Write the final dataset to `data/processed/` as partitioned Parquet.
 8. Demonstrate the output in a Jupyter notebook.
+
+### Prerequisites
+
+Running step 0 requires a local Java installation and the Synthea release jar (`synthea-with-dependencies.jar`). `scripts/run_synthea.ps1` wraps the invocation with the project's population size and seed.
 
 ## Planned modules
 
@@ -31,6 +36,10 @@ The Block 1 flow will be:
 Holds project paths, file names, row-count settings, and simple configuration constants.
 REFERENCE_DATE = 2025-01-01
 RANDOM_SEED = 42
+NUM_PERSONS = 10,000 (target PERSON row count)
+TOTAL_ROW_BUDGET ≈ 100,000 (sanity check across all six tables)
+DIRTY_DATA_FRACTION ≈ 0.01-0.02 per injected-issue category
+Paths: `data/synthea_raw/`, `data/raw/`, `data/processed/`, `data/sample/`
 These values ensure deterministic and reproducible pipeline runs.
 
 ### `src/schemas.py`
@@ -41,18 +50,21 @@ Defines the Spark schemas for:
 - DRUG_EXPOSURE
 - MEASUREMENT
 - NOTE
+- analytic_person
 
+### `src/concepts.py`
+Defines synthetic `*_concept_id` lookup dictionaries mapping Synthea's native codes (SNOMED/RxNorm/LOINC, and gender/race/ethnicity strings) to small synthetic integers, for the concept families named in `docs/spec.md` (gender, race/ethnicity, visit types, chronic conditions + related drugs, measurements + units). Used by `src/generator.py` during mapping; codes outside the whitelist are excluded.
 
 ### `src/generator.py`
 Contains synthetic data generation logic for all Block 1 tables.
 
 Responsibilities:
-- ingest Synthea outputs
-- transform selected Synthea tables into simplified OMOP-style tables
-- map Synthea records to PERSON, VISIT_OCCURRENCE,
-  CONDITION_OCCURRENCE, DRUG_EXPOSURE, MEASUREMENT and NOTE
-- preserve referential integrity during transformation
-- maintain deterministic processing using a fixed seed and reference date
+- ingest Synthea CSV exports from `data/synthea_raw/`
+- map Synthea records to PERSON, VISIT_OCCURRENCE, CONDITION_OCCURRENCE, DRUG_EXPOSURE, MEASUREMENT and NOTE using `src/concepts.py` lookups
+- generate `note_text` via templates (Synthea's CSV export has no free-text notes)
+- inject a small, deterministic share of dirty rows (duplicates, required-field nulls, bad date pairs, out-of-range values, orphaned FK references) per `docs/spec.md`'s "Intentional data quality issues"
+- write the resulting tables to `data/raw/`
+- maintain deterministic processing using `RANDOM_SEED` and `REFERENCE_DATE`
 
 ### `src/io_utils.py`
 Handles reading and writing local CSV or Parquet files.
@@ -63,33 +75,36 @@ Responsibilities:
 - write processed outputs
 
 ### `src/validations.py`
-Contains validation checks and helper functions.
-
-Initial checks:
+Contains validation **detection** functions — pure checks that return per-category violation counts/row identifiers without halting the pipeline:
 - event `person_id` values exist in PERSON
 - optional `visit_occurrence_id` values exist in VISIT_OCCURRENCE
 - start/end dates are logically ordered
 - required columns are non-null where expected
+- numeric values fall within plausible ranges
+- duplicate primary keys
+
+Run twice by `src/pipeline.py`: once on raw data (results feed cleaning and the "validation failures" metric) and once on cleaned data (results gate output creation).
 
 ### `src/transforms.py`
-Contains transformation and aggregation logic.
+Contains cleaning, transformation, and aggregation logic.
 
 Initial responsibilities:
-- clean nulls and cast types
-- standardize date fields
+- drop/quarantine rows flagged by `src/validations.py`'s raw-data pass, logging before/after row counts
+- cast types and standardize date fields
 - compute visit counts by person
 - derive chronic condition flags
 - compute latest selected measurement values
-- write analytic_person as partitioned Parquet output
+- build and write analytic_person as partitioned Parquet output
 
 ### `src/pipeline.py`
 Coordinates the full pipeline.
 
 Responsibilities:
 - read source data
-- run validation steps
-- run transformations
-- write final output
+- run validation (detection) on raw data
+- run cleaning and transformations
+- run validation (gate) on cleaned data; abort before writing output if it fails
+- write final output and pipeline metrics
 
 ### `src/main.py`
 Command-line entry point that executes the entire Block 1 workflow from a single command, including data generation, validation, transformation, and output creation.
@@ -103,13 +118,15 @@ Design priorities for Block 1:
 - deterministic generation
 - realistic-enough distributions
 - simple concept sets
-- small enough to run locally but large enough to feel realistic
+- ~10,000 persons, ~100,000 total rows across all six tables
+- a small, known share of intentionally dirty rows to exercise validation/cleaning
 
 Initial generation approach:
 - create PERSON first
 - create VISIT_OCCURRENCE next
 - create CONDITION_OCCURRENCE, DRUG_EXPOSURE, MEASUREMENT and NOTE from persons and visits
 - preserve referential integrity during generation rather than trying to repair it later
+- apply dirty-data injection as a final pass over the generated tables
 
 ## Testing plan
 
