@@ -14,21 +14,16 @@ from src.config import PROCESSED_DIR, RAW_DIR
 
 
 def get_spark_session(app_name: str = "block1-pipeline") -> SparkSession:
-    # Java 17+ deprecates and Java 21 removes Subject.getSubject(AccessControlContext),
-    # which Hadoop's UserGroupInformation calls during filesystem access. These JVM flags
-    # re-open the affected modules so local CSV reads work without Kerberos.
-    _jvm_opts = (
-        "--add-opens=java.base/sun.security.krb5=ALL-UNNAMED "
-        "--add-opens=java.base/javax.security.auth=ALL-UNNAMED "
-        "-Djava.security.manager=allow"
-    )
+    # On Java 21+, Subject.getSubject(AccessControlContext) throws
+    # UnsupportedOperationException. -Djdk.security.auth.subject.useTL=true
+    # (introduced JDK 18) makes it use a thread-local instead, restoring
+    # the expected behaviour without Kerberos.
     return (
         SparkSession.builder
         .appName(app_name)
         .config("spark.sql.session.timeZone", "UTC")
         .config("spark.hadoop.security.authentication", "simple")
-        .config("spark.driver.extraJavaOptions", _jvm_opts)
-        .config("spark.executor.extraJavaOptions", _jvm_opts)
+        .config("spark.driver.extraJavaOptions", "-Djdk.security.auth.subject.useTL=true")
         .getOrCreate()
     )
 
