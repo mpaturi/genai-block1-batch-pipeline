@@ -55,4 +55,5 @@ java -jar $JarPath `
     -s $Seed `
     -r $ReferenceDate `
     --exporter.csv.export=true `
+    --exporter.fhir.export=false `
     --exporter.baseDirectory=$OutputDir

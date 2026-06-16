@@ -14,6 +14,9 @@ RANDOM_SEED = 42
 NUM_PERSONS = 10_000
 TOTAL_ROW_BUDGET = 100_000
 
+# Max visits kept per person (controls row budget at scale; see docs/spec.md)
+VISITS_PER_PERSON = 2
+
 # Share of rows injected with each dirty-data issue category (Phase 5)
 DIRTY_DATA_FRACTION = 0.015
 
