@@ -21,6 +21,8 @@ RACE_CONCEPT_ID = {
     "black": 2,
     "asian": 3,
     "hawaiian": 4,
+    "native": 5,   # American Indian / Alaska Native
+    "other": 6,
 }
 
 # patients.csv ETHNICITY
