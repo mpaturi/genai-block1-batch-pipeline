@@ -2,6 +2,10 @@
 
 A Python/PySpark batch pipeline project built on a fully synthetic OMOP-style healthcare dataset. The goal of Block 1 is to establish a clean, testable, and interview-ready foundation for a healthcare data pipeline using a simplified subset of OMOP-like tables. 
 
+## Business value
+
+This project demonstrates a production-ready healthcare data pipeline that takes raw synthetic patient data and transforms it into a clean, validated, analytics-ready dataset — the kind of foundation that healthcare organizations need before they can do anything useful with their data. It enforces data quality at every step: detecting nulls, duplicates, orphaned records, and out-of-range values, then cleaning them systematically with full before-and-after traceability. The output — a single patient-level table with visit counts, chronic condition flags, and latest lab values — is the building block for clinical analytics like population health management, risk stratification, and care gap identification. By using OMOP-style conventions, the pipeline speaks the same language as industry-standard research networks (OHDSI), making it portable across health systems. The deterministic, seed-based design means results are fully reproducible, which is critical for regulatory and audit requirements in healthcare. In short, it solves the unglamorous but essential problem that most health data projects fail on: getting messy clinical data into a trustworthy, queryable shape before any analytics or AI can begin.
+
 ## Data flow
 
 ![Data Flow](docs/data_flow.png)
@@ -171,21 +175,21 @@ This project uses synthetic OMOP-style healthcare data only. Bulk generated data
 
 Block 1 was built across 13 phases (0–12), each delivered as a separate branch and PR.
 
-| Phase | Deliverable |
-|---:|---|
-| 0 | Project documentation — `spec.md`, `plan.md`, `tasks.md` |
-| 1 | Environment and config foundation — `src/config.py` |
-| 2 | Synthea inspection — grounded design in real Synthea output |
-| 3 | Concept dictionaries — `src/concepts.py` |
-| 4 | PySpark schemas — `src/schemas.py` |
-| 5 | Data generator — `src/generator.py` (Synthea CSV to raw OMOP tables with dirty-data injection) |
-| 6 | I/O utilities — `src/io_utils.py` (Spark read/write helpers) |
-| 7 | Validations — `src/validations.py` (null, range, FK, date-order, duplicate checks) |
-| 8 | Transforms — `src/transforms.py` (cleaning and `analytic_person` build) |
-| 9 | Pipeline orchestration — `src/pipeline.py` |
-| 10 | Tests — 103 pytest tests |
-| 11 | Demo notebook — `notebooks/demo.ipynb` |
-| 12 | Polish — docs cleanup, `run_all.py`, final fixes |
+| Phase | Deliverable | Claude helped | User overrode |
+|---:|---|---|---|
+| 0 | Project documentation — `spec.md`, `plan.md`, `tasks.md` | Drafted spec, plan, and tasks docs | Selected the final project scope including the six healthcare tables and validation framework. Wrote initial DOD, partitioned write requirements, and NOTE table design. Decided to focus on batch processing rather than streaming architecture |
+| 1 | Environment and config foundation — `src/config.py` | Built config with paths, constants, and seed values | — |
+| 2 | Synthea inspection — grounded design in real Synthea output | Explored Synthea CSV/FHIR output, documented findings | Drove the inspection and performed manual validation of healthcare concepts. Corrected spec — visit type comes from ENCOUNTERCLASS, not SNOMED CODE |
+| 3 | Concept dictionaries — `src/concepts.py` | Built concept ID lookup dictionaries from real Synthea codes | Validated healthcare concepts against real Synthea output to ensure the project remained realistic |
+| 4 | PySpark schemas — `src/schemas.py` | Defined StructType schemas for all tables | Determined the final data model. Requested extending RACE_CONCEPT_ID with additional entries Claude's implementation missed |
+| 5 | Data generator — `src/generator.py` | Built full generator with Synthea CSV mapping and dirty-data injection | Chose which data quality rules to implement and how they should be organized. Claude incorrectly described NOTE generation as "template-based" and referenced FHIR bundles — user caught both errors later |
+| 6 | I/O utilities — `src/io_utils.py` | Built Spark read/write helpers | Identified 3 Java 21+/25 compatibility issues on Windows that Claude did not anticipate. Rejected unnecessary distributed infrastructure suggestions |
+| 7 | Validations — `src/validations.py` | Built all validation checks (null, range, FK, date-order, duplicate) | Defined the validation framework and decided how checks should be organized |
+| 8 | Transforms — `src/transforms.py` | Built cleaning functions and `analytic_person` join/aggregation | Validated Spark logic and business requirements to ensure alignment with data engineering best practices |
+| 9 | Pipeline orchestration — `src/pipeline.py` | Built pipeline with two-pass validation and hard gate | — |
+| 10 | Tests — 103 pytest tests | Wrote all 103 tests | Determined the testing strategy — reserved an entire phase for tests rather than writing them incrementally. Defined what the tests should cover |
+| 11 | Demo notebook — `notebooks/demo.ipynb` | Built end-to-end notebook walkthrough | Identified sys.path fix and 4 Java compatibility fixes Claude missed across sessions |
+| 12 | Polish — docs cleanup, `run_all.py`, final fixes | Drafted docs and scripts | Caught inaccurate "template-based" NOTE wording. Rejected PowerShell-only `run_all.ps1` — required a single cross-platform Python script. Identified missing pipeline metrics despite being in the spec. Evaluated AI suggestion to use `local[*]` for tests — found it slower, reverted. Determined final documentation structure and implementation roadmap |
 
 ## Status
 
