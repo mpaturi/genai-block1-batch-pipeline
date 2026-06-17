@@ -25,6 +25,12 @@ The pipeline produces a patient-level analytics table (`analytic_person`) with o
 
 Written as partitioned Parquet under `data/processed/`, partitioned by `year_of_birth_band`.
 
+### Joins and aggregations
+
+![Join Diagram](docs/join_diagram.png)
+
+Each clinical table is aggregated by `person_id`, then left-joined onto PERSON to produce one row per person.
+
 ## Scope
 
 Block 1 includes:
