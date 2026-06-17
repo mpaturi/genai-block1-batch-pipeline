@@ -9,7 +9,7 @@ date match src/config.py (NUM_PERSONS, RANDOM_SEED, REFERENCE_DATE) so the raw
 export is reproducible.
 
 Requires:
-- Java 11+ on PATH
+- Java 21 LTS on PATH
 - synthea-with-dependencies.jar, downloaded from
   https://github.com/synthetichealth/synthea/releases/latest and placed at
   tools/synthea-with-dependencies.jar (or pass -JarPath).

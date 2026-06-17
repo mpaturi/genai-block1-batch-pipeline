@@ -2,92 +2,92 @@
 
 ## Documentation
 
-- [ ] Finalize Block 1 scope and success criteria in `docs/spec.md`
-- [ ] Document selected OMOP-style tables and simplified schemas
-- [ ] Document relationships centered on `PERSON.person_id`
-- [ ] Document storage plan for `data/raw/` and `data/processed/`
-- [ ] Document synthetic data assumptions and initial concept sets
-- [ ] Define the `analytic_person` output schema and column derivations in `docs/spec.md`
-- [ ] Write implementation approach in `docs/plan.md`
-- [ ] Clarify what Block 1 includes versus what is deferred
-- [ ] Keep `README.md` aligned with actual current scope
+- [x] Finalize Block 1 scope and success criteria in `docs/spec.md`
+- [x] Document selected OMOP-style tables and simplified schemas
+- [x] Document relationships centered on `PERSON.person_id`
+- [x] Document storage plan for `data/raw/` and `data/processed/`
+- [x] Document synthetic data assumptions and initial concept sets
+- [x] Define the `analytic_person` output schema and column derivations in `docs/spec.md`
+- [x] Write implementation approach in `docs/plan.md`
+- [x] Clarify what Block 1 includes versus what is deferred
+- [x] Keep `README.md` aligned with actual current scope
 
 ## Repo and environment
 
-- [ ] Confirm top-level folders exist: `docs/`, `src/`, `tests/`, `notebooks/`, `data/`, `scripts/`
-- [ ] Confirm local virtual environment `myenv` works
-- [ ] Install Block 1 dependencies
-- [ ] Capture pinned dependencies in `requirements.txt`
-- [ ] Finalize `.gitignore` for envs, data, caches, logs, and notebook artifacts
+- [x] Confirm top-level folders exist: `docs/`, `src/`, `tests/`, `notebooks/`, `data/`, `scripts/`
+- [x] Confirm local virtual environment `myenv` works
+- [x] Install Block 1 dependencies
+- [x] Capture pinned dependencies in `requirements.txt`
+- [x] Finalize `.gitignore` for envs, data, caches, logs, and notebook artifacts
 
 ## Schema and generation design
 
-- [ ] Finalize exact column lists for PERSON
-- [ ] Finalize exact column lists for VISIT_OCCURRENCE
-- [ ] Finalize exact column lists for CONDITION_OCCURRENCE
-- [ ] Finalize exact column lists for DRUG_EXPOSURE
-- [ ] Finalize exact column lists for MEASUREMENT
-- [ ] Finalize exact column lists for NOTE
-- [ ] Define datatypes for all columns
-- [ ] Define concept ID sets for visit types, conditions, drugs, and measurements
-- [ ] Define generation rules for demographics
-- [ ] Define generation rules for visit frequency
-- [ ] Define generation rules for chronic conditions
-- [ ] Define generation rules for drug exposures
-- [ ] Define generation rules for measurements and realistic ranges
-- [ ] Finalize Parquet as the processed output format
+- [x] Finalize exact column lists for PERSON
+- [x] Finalize exact column lists for VISIT_OCCURRENCE
+- [x] Finalize exact column lists for CONDITION_OCCURRENCE
+- [x] Finalize exact column lists for DRUG_EXPOSURE
+- [x] Finalize exact column lists for MEASUREMENT
+- [x] Finalize exact column lists for NOTE
+- [x] Define datatypes for all columns
+- [x] Define concept ID sets for visit types, conditions, drugs, and measurements
+- [x] Define generation rules for demographics
+- [x] Define generation rules for visit frequency
+- [x] Define generation rules for chronic conditions
+- [x] Define generation rules for drug exposures
+- [x] Define generation rules for measurements and realistic ranges
+- [x] Finalize Parquet as the processed output format
 
 ## Data generation
 
-- [ ] Implement PERSON generator
-- [ ] Implement VISIT_OCCURRENCE generator
-- [ ] Implement CONDITION_OCCURRENCE generator
-- [ ] Implement DRUG_EXPOSURE generator
-- [ ] Implement MEASUREMENT generator
-- [ ] Implement NOTE generator
-- [ ] Add deterministic seed support
-- [ ] Write generated tables to `data/raw/`
-- [ ] Verify row counts and key uniqueness
+- [x] Implement PERSON generator
+- [x] Implement VISIT_OCCURRENCE generator
+- [x] Implement CONDITION_OCCURRENCE generator
+- [x] Implement DRUG_EXPOSURE generator
+- [x] Implement MEASUREMENT generator
+- [x] Implement NOTE generator
+- [x] Add deterministic seed support
+- [x] Write generated tables to `data/raw/`
+- [x] Verify row counts and key uniqueness
 
 ## Pipeline
 
-- [ ] Implement raw-data readers in PySpark
-- [ ] Add explicit schemas
-- [ ] Implement type casting and date parsing
-- [ ] Add basic null handling
-- [ ] Add referential integrity validation on `person_id`
-- [ ] Add optional referential validation on `visit_occurrence_id`
-- [ ] Add date-order validation
-- [ ] Implement visit aggregations by person
-- [ ] Implement condition-based flags
-- [ ] Implement latest-measurement logic
-- [ ] Generate pipeline quality report
-- [ ] Build final `analytic_person` dataset
-- [ ] Write final output to `data/processed/`
+- [x] Implement raw-data readers in PySpark
+- [x] Add explicit schemas
+- [x] Implement type casting and date parsing
+- [x] Add basic null handling
+- [x] Add referential integrity validation on `person_id`
+- [x] Add optional referential validation on `visit_occurrence_id`
+- [x] Add date-order validation
+- [x] Implement visit aggregations by person
+- [x] Implement condition-based flags
+- [x] Implement latest-measurement logic
+- [x] Generate pipeline quality report
+- [x] Build final `analytic_person` dataset
+- [x] Write final output to `data/processed/`
 
 ## Testing
 
-- [ ] Add `tests/conftest.py` Spark fixture
-- [ ] Add unit tests for helper functions
-- [ ] Add validation tests for `person_id` integrity
-- [ ] Add validation tests for date consistency
-- [ ] Add tests for required non-null fields
-- [ ] Add transformation tests for person-level aggregations
-- [ ] Add smoke test for pipeline run on tiny sample data
+- [x] Add `tests/conftest.py` Spark fixture
+- [x] Add unit tests for helper functions
+- [x] Add validation tests for `person_id` integrity
+- [x] Add validation tests for date consistency
+- [x] Add tests for required non-null fields
+- [x] Add transformation tests for person-level aggregations
+- [x] Add smoke test for pipeline run on tiny sample data
 
 ## Notebook demo
 
-- [ ] Create `notebooks/block1_demo.ipynb`
-- [ ] Add short markdown intro about project and dataset
-- [ ] Load processed analytic output
-- [ ] Show row counts and schema
-- [ ] Add one or two simple analyses
-- [ ] Add one or two simple plots
+- [x] Create `notebooks/demo.ipynb`
+- [x] Add short markdown intro about project and dataset
+- [x] Load processed analytic output
+- [x] Show row counts and schema
+- [x] Add one or two simple analyses
+- [x] Add one or two simple plots
 
 ## Polish
 
-- [ ] Review `.gitignore` one more time
-- [ ] Review README for accuracy
-- [ ] Make sure notebook output is present only if intentional
-- [ ] Make sure only tiny sample data, if any, is committed
-- [ ] Make sure docs reflect final Block 1 implementation
+- [x] Review `.gitignore` one more time
+- [x] Review README for accuracy
+- [x] Make sure notebook output is present only if intentional
+- [x] Make sure only tiny sample data, if any, is committed
+- [x] Make sure docs reflect final Block 1 implementation

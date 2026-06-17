@@ -122,8 +122,8 @@ Key integrity expectations:
 
 ## Data Lineage
 
-Synthea CLI (Java) → `data/synthea_raw/` (native Synthea CSV + FHIR export)
-        ↓ (`src/generator.py`: concept-dictionary mapping, FHIR-sourced NOTE extraction, dirty-data injection)
+Synthea CLI (Java) → `data/synthea_raw/` (native Synthea CSV export)
+        ↓ (`src/generator.py`: concept-dictionary mapping, template-based NOTE generation, dirty-data injection)
 `data/raw/` (simplified OMOP-style tables, ~1-2% intentionally dirty rows per category)
         ↓
 Validation (detection: null / datatype / range / referential-integrity / date-order checks)
@@ -137,7 +137,7 @@ analytic_person → `data/processed/` (partitioned Parquet)
 ## Storage plan
 
 Local data layout:
-- raw Synthea export: `data/synthea_raw/` — native Synthea CSV output under `csv/` (`patients.csv`, `encounters.csv`, `conditions.csv`, `medications.csv`, `observations.csv`, etc.), plus per-patient FHIR bundles under `fhir/` used only as the source for `note_text` (see "NOTE generation")
+- raw Synthea export: `data/synthea_raw/` — native Synthea CSV output (`patients.csv`, `encounters.csv`, `conditions.csv`, `medications.csv`, `observations.csv`, etc.)
 - raw generated data: `data/raw/` (simplified OMOP-style tables produced by `src/generator.py`, including intentionally injected dirty rows)
 - processed outputs: `data/processed/`
 - optional tiny sample data for tests: `data/sample/`
@@ -176,7 +176,7 @@ Synthea's raw CSV export (`data/synthea_raw/`) identifies patients, encounters, 
 
 ### NOTE generation
 
-Synthea's CSV export does not include free-text clinical notes, but its FHIR export (`data/synthea_raw/fhir/*.json`, one bundle per patient, generated alongside the CSV export) does: each bundle's `DocumentReference` entries carry a clinical note as base64-encoded plain text in `content[].attachment.data`. `src/generator.py` decodes this payload into `note_text`, and derives `note_id` (sequential), `person_id` (from the `subject` reference via the Identifier mapping above), `note_date` (from `date`), and `visit_occurrence_id` (from the optional `context.encounter` reference, when present).
+Synthea's CSV export does not include free-text clinical notes. `src/generator.py` generates synthetic note text using visit-type-specific templates: each visit produces one NOTE record with a `note_text` built from complaint and assessment phrases keyed to the visit concept (outpatient, inpatient, ER). The remaining columns — `note_id` (sequential), `person_id`, `note_date` (from `visit_start_date`), and `visit_occurrence_id` — are derived directly from the mapped VISIT_OCCURRENCE rows.
 
 ### Target scale
 
