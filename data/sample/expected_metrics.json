@@ -1,0 +1,72 @@
+{
+  "row_counts": {
+    "raw": {
+      "person": 11770,
+      "visit_occurrence": 23541,
+      "condition_occurrence": 5037,
+      "drug_exposure": 4564,
+      "measurement": 24431,
+      "note": 46729
+    },
+    "cleaned": {
+      "person": 11424,
+      "visit_occurrence": 22175,
+      "condition_occurrence": 4817,
+      "drug_exposure": 4223,
+      "measurement": 22639,
+      "note": 22847
+    },
+    "dropped": {
+      "person": 346,
+      "visit_occurrence": 1366,
+      "condition_occurrence": 220,
+      "drug_exposure": 341,
+      "measurement": 1792,
+      "note": 23882
+    },
+    "analytic_person": 11424
+  },
+  "validation": {
+    "raw": [
+      {"table": "person", "check": "null_gender_concept_id", "violations": 0},
+      {"table": "person", "check": "null_year_of_birth", "violations": 176},
+      {"table": "person", "check": "null_race_concept_id", "violations": 0},
+      {"table": "person", "check": "null_ethnicity_concept_id", "violations": 0},
+      {"table": "person", "check": "dup_pk", "violations": 173},
+      {"table": "visit_occurrence", "check": "null_person_id", "violations": 0},
+      {"table": "visit_occurrence", "check": "null_visit_concept_id", "violations": 352},
+      {"table": "visit_occurrence", "check": "null_visit_start_date", "violations": 0},
+      {"table": "visit_occurrence", "check": "null_visit_end_date", "violations": 0},
+      {"table": "visit_occurrence", "check": "bad_date_visit_end_date", "violations": 350},
+      {"table": "visit_occurrence", "check": "orphan_person_id", "violations": 0},
+      {"table": "visit_occurrence", "check": "dup_pk", "violations": 347},
+      {"table": "condition_occurrence", "check": "null_person_id", "violations": 0},
+      {"table": "condition_occurrence", "check": "null_condition_concept_id", "violations": 75},
+      {"table": "condition_occurrence", "check": "null_condition_start_date", "violations": 0},
+      {"table": "condition_occurrence", "check": "bad_date_condition_end_date", "violations": 77},
+      {"table": "condition_occurrence", "check": "dup_pk", "violations": 74},
+      {"table": "drug_exposure", "check": "null_person_id", "violations": 0},
+      {"table": "drug_exposure", "check": "null_drug_concept_id", "violations": 68},
+      {"table": "drug_exposure", "check": "null_drug_exposure_start_date", "violations": 0},
+      {"table": "drug_exposure", "check": "null_days_supply", "violations": 0},
+      {"table": "drug_exposure", "check": "null_quantity", "violations": 0},
+      {"table": "drug_exposure", "check": "bad_date_drug_exposure_end_date", "violations": 78},
+      {"table": "drug_exposure", "check": "neg_days_supply", "violations": 69},
+      {"table": "drug_exposure", "check": "neg_quantity", "violations": 68},
+      {"table": "drug_exposure", "check": "dup_pk", "violations": 67},
+      {"table": "measurement", "check": "null_person_id", "violations": 0},
+      {"table": "measurement", "check": "null_measurement_concept_id", "violations": 0},
+      {"table": "measurement", "check": "null_measurement_date", "violations": 366},
+      {"table": "measurement", "check": "null_value_as_number", "violations": 0},
+      {"table": "measurement", "check": "neg_value_as_number", "violations": 367},
+      {"table": "measurement", "check": "orphan_person_id", "violations": 363},
+      {"table": "measurement", "check": "dup_pk", "violations": 361},
+      {"table": "note", "check": "null_person_id", "violations": 0},
+      {"table": "note", "check": "null_note_date", "violations": 23188},
+      {"table": "note", "check": "null_note_text", "violations": 23541},
+      {"table": "note", "check": "orphan_visit_occurrence_id", "violations": 6},
+      {"table": "note", "check": "dup_pk", "violations": 23534}
+    ],
+    "cleaned_violations": 0
+  }
+}

@@ -11,12 +11,16 @@ Execution order
 5. build_analytic_person()       — produce one row per person.
 6. write_parquet()               — write analytic_person to data/processed/ partitioned
                                    by year_of_birth_band.
+7. write_metrics()               — persist row counts, validation results, and stage
+                                   timings to data/processed/pipeline_metrics.json.
 
 Entry point: run() — call directly or via `python -m src.pipeline`.
 """
 
+import json
 import logging
 import sys
+import time
 
 from src import io_utils, transforms, validations
 from src.config import PROCESSED_DIR
@@ -57,6 +61,21 @@ def _log_cleaning_metrics(metrics) -> None:
         log.info("  %-30s  %6d → %6d  (dropped %d)", table, before, after, dropped)
 
 
+def _validation_to_dict(results: list[ValidationResult]) -> list[dict]:
+    return [
+        {"table": r.table, "check": r.check, "violations": r.count}
+        for r in results
+    ]
+
+
+def _write_metrics(metrics_dict: dict) -> None:
+    path = PROCESSED_DIR / "pipeline_metrics.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(metrics_dict, f, indent=2)
+    log.info("Pipeline metrics written to %s", path)
+
+
 # ---------------------------------------------------------------------------
 # Pipeline stages
 # ---------------------------------------------------------------------------
@@ -72,10 +91,11 @@ def _read_raw(spark) -> tuple:
     return person, visit, condition, drug, measurement, note
 
 
-def _validate_raw(person, visit, condition, drug, measurement, note) -> None:
+def _validate_raw(person, visit, condition, drug, measurement, note) -> list[ValidationResult]:
     log.info("Running validation on raw tables ...")
     results = validations.validate_all(person, visit, condition, drug, measurement, note)
     _log_validation_results(results, "RAW")
+    return results
 
 
 def _clean(person, visit, condition, drug, measurement, note) -> tuple[CleanedTables, object]:
@@ -85,7 +105,7 @@ def _clean(person, visit, condition, drug, measurement, note) -> tuple[CleanedTa
     return tables, metrics
 
 
-def _validate_cleaned(tables: CleanedTables) -> None:
+def _validate_cleaned(tables: CleanedTables) -> list[ValidationResult]:
     log.info("Running validation on cleaned tables (hard gate) ...")
     results = validations.validate_all(
         tables.person,
@@ -102,9 +122,10 @@ def _validate_cleaned(tables: CleanedTables) -> None:
         raise PipelineValidationError(
             f"Cleaned tables still have {len(violations)} violation(s): {summary}"
         )
+    return results
 
 
-def _build_and_write(tables: CleanedTables, spark) -> None:
+def _build_and_write(tables: CleanedTables, spark) -> int:
     log.info("Building analytic_person ...")
     analytic = transforms.build_analytic_person(
         tables.person,
@@ -115,7 +136,9 @@ def _build_and_write(tables: CleanedTables, spark) -> None:
     )
     log.info("Writing analytic_person to %s (partitioned by year_of_birth_band) ...", PROCESSED_DIR)
     io_utils.write_parquet(analytic, PROCESSED_DIR, partition_by=["year_of_birth_band"])
-    log.info("Done. Row count: %d", analytic.count())
+    row_count = analytic.count()
+    log.info("Done. Row count: %d", row_count)
+    return row_count
 
 
 # ---------------------------------------------------------------------------
@@ -125,11 +148,51 @@ def _build_and_write(tables: CleanedTables, spark) -> None:
 def run() -> None:
     spark = io_utils.get_spark_session("block1-pipeline")
     try:
+        t_start = time.perf_counter()
+
         person, visit, condition, drug, measurement, note = _read_raw(spark)
-        _validate_raw(person, visit, condition, drug, measurement, note)
-        tables, _ = _clean(person, visit, condition, drug, measurement, note)
-        _validate_cleaned(tables)
-        _build_and_write(tables, spark)
+
+        t_val_raw = time.perf_counter()
+        raw_results = _validate_raw(person, visit, condition, drug, measurement, note)
+        t_val_raw_done = time.perf_counter()
+
+        t_clean = time.perf_counter()
+        tables, cleaning_metrics = _clean(person, visit, condition, drug, measurement, note)
+        t_clean_done = time.perf_counter()
+
+        t_val_clean = time.perf_counter()
+        clean_results = _validate_cleaned(tables)
+        t_val_clean_done = time.perf_counter()
+
+        t_build = time.perf_counter()
+        analytic_count = _build_and_write(tables, spark)
+        t_build_done = time.perf_counter()
+
+        t_total = time.perf_counter() - t_start
+
+        _write_metrics({
+            "row_counts": {
+                "raw": cleaning_metrics.before,
+                "cleaned": cleaning_metrics.after,
+                "dropped": {
+                    t: cleaning_metrics.before[t] - cleaning_metrics.after[t]
+                    for t in cleaning_metrics.before
+                },
+                "analytic_person": analytic_count,
+            },
+            "validation": {
+                "raw": _validation_to_dict(raw_results),
+                "cleaned": _validation_to_dict(clean_results),
+            },
+            "timings_seconds": {
+                "validation_raw": round(t_val_raw_done - t_val_raw, 2),
+                "cleaning": round(t_clean_done - t_clean, 2),
+                "validation_cleaned": round(t_val_clean_done - t_val_clean, 2),
+                "build_and_write": round(t_build_done - t_build, 2),
+                "total": round(t_total, 2),
+            },
+        })
+
         log.info("Pipeline completed successfully.")
     finally:
         spark.stop()

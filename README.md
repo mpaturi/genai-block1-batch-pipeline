@@ -11,7 +11,7 @@ Synthea CLI (Java)
 data/synthea_raw/          native Synthea CSV export (git-ignored)
         │
         ▼
-src/generator.py           concept-dictionary mapping, template-based
+src/generator.py           concept-dictionary mapping, hardcoded
   ├─ src/concepts.py       NOTE generation, dirty-data injection
   └─ src/config.py
         │

@@ -123,7 +123,7 @@ Key integrity expectations:
 ## Data Lineage
 
 Synthea CLI (Java) → `data/synthea_raw/` (native Synthea CSV export)
-        ↓ (`src/generator.py`: concept-dictionary mapping, template-based NOTE generation, dirty-data injection)
+        ↓ (`src/generator.py`: concept-dictionary mapping, hardcoded NOTE generation, dirty-data injection)
 `data/raw/` (simplified OMOP-style tables, ~1-2% intentionally dirty rows per category)
         ↓
 Validation (detection: null / datatype / range / referential-integrity / date-order checks)
@@ -176,7 +176,7 @@ Synthea's raw CSV export (`data/synthea_raw/`) identifies patients, encounters, 
 
 ### NOTE generation
 
-Synthea's CSV export does not include free-text clinical notes. `src/generator.py` generates synthetic note text using visit-type-specific templates: each visit produces one NOTE record with a `note_text` built from complaint and assessment phrases keyed to the visit concept (outpatient, inpatient, ER). The remaining columns — `note_id` (sequential), `person_id`, `note_date` (from `visit_start_date`), and `visit_occurrence_id` — are derived directly from the mapped VISIT_OCCURRENCE rows.
+Synthea's CSV export does not include free-text clinical notes. `src/generator.py` generates synthetic note text by randomly selecting from hardcoded complaint and assessment phrases keyed to the visit type (outpatient, inpatient, ER). Each visit produces one NOTE record with a `note_text` built from these canned strings. The remaining columns — `note_id` (sequential), `person_id`, `note_date` (from `visit_start_date`), and `visit_occurrence_id` — are derived directly from the mapped VISIT_OCCURRENCE rows.
 
 ### Target scale
 

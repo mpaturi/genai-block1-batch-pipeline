@@ -17,7 +17,7 @@ This block is about creating a strong foundation:
 The Block 1 flow will be:
 
 0. Run the Synthea CLI (Java) locally to generate a raw patient population into `data/synthea_raw/`.
-1. Map selected Synthea CSV outputs into the simplified OMOP-style tables using `src/concepts.py` concept dictionaries, generate template-based NOTE text from visit data, inject a small share of intentionally dirty rows, and write the result to `data/raw/`.
+1. Map selected Synthea CSV outputs into the simplified OMOP-style tables using `src/concepts.py` concept dictionaries, generate NOTE text from hardcoded phrases keyed to visit type, inject a small share of intentionally dirty rows, and write the result to `data/raw/`.
 2. Read raw tables into PySpark using explicit schemas.
 3. Run validation checks on raw data to detect dirty rows (null/datatype/range/referential-integrity/date-order).
 4. Clean (drop/quarantine) the detected rows, logging before/after row counts; standardize datatypes and date fields.
@@ -61,7 +61,7 @@ Contains synthetic data generation logic for all Block 1 tables.
 Responsibilities:
 - ingest Synthea CSV exports from `data/synthea_raw/`
 - map Synthea records to PERSON, VISIT_OCCURRENCE, CONDITION_OCCURRENCE, DRUG_EXPOSURE, and MEASUREMENT using `src/concepts.py` lookups
-- generate NOTE records with template-based `note_text` derived from visit data (visit-type-specific complaint and assessment phrases)
+- generate NOTE records with `note_text` by randomly selecting from hardcoded complaint and assessment phrases keyed to visit type (outpatient, inpatient, ER)
 - inject a small, deterministic share of dirty rows (duplicates, required-field nulls, bad date pairs, out-of-range values, orphaned FK references) per `docs/spec.md`'s "Intentional data quality issues"
 - write the resulting tables to `data/raw/`
 - maintain deterministic processing using `RANDOM_SEED` and `REFERENCE_DATE`
