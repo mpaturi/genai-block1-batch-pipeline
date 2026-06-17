@@ -31,6 +31,10 @@ Written as partitioned Parquet under `data/processed/`, partitioned by `year_of_
 
 Each clinical table is aggregated by `person_id`, then left-joined onto PERSON to produce one row per person.
 
+### Aggregations
+
+![Aggregation Diagram](docs/aggregation_diagram.png)
+
 ## Scope
 
 Block 1 includes:
