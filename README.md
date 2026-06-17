@@ -4,39 +4,7 @@ A Python/PySpark batch pipeline project built on a fully synthetic OMOP-style he
 
 ## Architecture
 
-```text
-Synthea CLI (Java)
-        │
-        ▼
-data/synthea_raw/          native Synthea CSV export (git-ignored)
-        │
-        ▼
-src/generator.py           concept-dictionary mapping, hardcoded
-  ├─ src/concepts.py       NOTE generation, dirty-data injection
-  └─ src/config.py
-        │
-        ▼
-data/raw/                  6 simplified OMOP-style CSV tables (git-ignored)
-  PERSON · VISIT_OCCURRENCE · CONDITION_OCCURRENCE
-  DRUG_EXPOSURE · MEASUREMENT · NOTE
-        │
-        ▼
-src/pipeline.py            orchestration entry point
-  ├─ src/io_utils.py       Spark read/write helpers
-  ├─ src/schemas.py        PySpark StructType schemas
-  ├─ src/validations.py    null / range / FK / date-order / duplicate checks
-  └─ src/transforms.py     cleaning + analytic_person build
-        │
-        │  1. Read raw CSVs into Spark
-        │  2. Validate raw tables (detection, log-only)
-        │  3. Clean: drop dirty rows
-        │  4. Validate cleaned tables (hard gate)
-        │  5. Build analytic_person
-        │  6. Write partitioned Parquet
-        ▼
-data/processed/            analytic_person/ partitioned by year_of_birth_band
-                           (git-ignored)
-```
+![Pipeline Architecture](docs/architecture.png)
 
 ## Scope
 
