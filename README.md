@@ -101,6 +101,26 @@ Raw validation detects 21 check failures across the 6 tables. After cleaning, al
 
 This project uses synthetic OMOP-style healthcare data only. Bulk generated data is stored locally and is not committed to version control.
 
+## Implementation phases
+
+Block 1 was built across 13 phases (0–12), each delivered as a separate branch and PR.
+
+| Phase | Deliverable |
+|---:|---|
+| 0 | Project documentation — `spec.md`, `plan.md`, `tasks.md` |
+| 1 | Environment and config foundation — `src/config.py` |
+| 2 | Synthea inspection — grounded design in real Synthea output |
+| 3 | Concept dictionaries — `src/concepts.py` |
+| 4 | PySpark schemas — `src/schemas.py` |
+| 5 | Data generator — `src/generator.py` (Synthea CSV to raw OMOP tables with dirty-data injection) |
+| 6 | I/O utilities — `src/io_utils.py` (Spark read/write helpers) |
+| 7 | Validations — `src/validations.py` (null, range, FK, date-order, duplicate checks) |
+| 8 | Transforms — `src/transforms.py` (cleaning and `analytic_person` build) |
+| 9 | Pipeline orchestration — `src/pipeline.py` |
+| 10 | Tests — 103 pytest tests |
+| 11 | Demo notebook — `notebooks/demo.ipynb` |
+| 12 | Polish — docs cleanup, `run_all.ps1`, final fixes |
+
 ## Status
 
-Block 1 is complete. All 12 implementation phases have been merged, 103 tests pass, and the demo notebook runs end-to-end. Later blocks may expand the schema, increase scale, and introduce more advanced engineering concerns.
+Block 1 is complete. All phases have been merged, 103 tests pass, and the demo notebook runs end-to-end. Later blocks may expand the schema, increase scale, and introduce more advanced engineering concerns.
