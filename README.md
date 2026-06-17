@@ -2,6 +2,10 @@
 
 A Python/PySpark batch pipeline project built on a fully synthetic OMOP-style healthcare dataset. The goal of Block 1 is to establish a clean, testable, and interview-ready foundation for a healthcare data pipeline using a simplified subset of OMOP-like tables. 
 
+## Data flow
+
+![Data Flow](docs/data_flow.png)
+
 ## Architecture
 
 ![Pipeline Architecture](docs/architecture.png)
