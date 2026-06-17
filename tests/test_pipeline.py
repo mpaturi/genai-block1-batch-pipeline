@@ -100,42 +100,34 @@ class TestPipelineValidationError:
 # ---------------------------------------------------------------------------
 
 class TestValidateCleaned:
-    def test_passes_silently_with_clean_tables(self, spark):
-        tables = _clean_tables(spark)
+    @pytest.fixture(scope="class")
+    def tables(self, spark):
+        return _clean_tables(spark)
+
+    @pytest.fixture(scope="class")
+    def dirty_tables(self, spark, tables):
+        dirty_person = spark.createDataFrame(
+            [(1, None, 1980, 8516, 38003564)], PERSON_SCHEMA
+        )
+        return CleanedTables(
+            person=dirty_person,
+            visit=tables.visit,
+            condition=tables.condition,
+            drug=tables.drug,
+            measurement=tables.measurement,
+            note=tables.note,
+        )
+
+    def test_passes_silently_with_clean_tables(self, tables):
         _validate_cleaned(tables)  # should not raise
 
-    def test_raises_when_violations_remain(self, spark):
-        tables = _clean_tables(spark)
-        # Replace person with a dirty row (null gender stays after "cleaning")
-        dirty_person = spark.createDataFrame(
-            [(1, None, 1980, 8516, 38003564)], PERSON_SCHEMA
-        )
-        tables = CleanedTables(
-            person=dirty_person,
-            visit=tables.visit,
-            condition=tables.condition,
-            drug=tables.drug,
-            measurement=tables.measurement,
-            note=tables.note,
-        )
+    def test_raises_when_violations_remain(self, dirty_tables):
         with pytest.raises(PipelineValidationError):
-            _validate_cleaned(tables)
+            _validate_cleaned(dirty_tables)
 
-    def test_error_message_names_the_violation(self, spark):
-        tables = _clean_tables(spark)
-        dirty_person = spark.createDataFrame(
-            [(1, None, 1980, 8516, 38003564)], PERSON_SCHEMA
-        )
-        tables = CleanedTables(
-            person=dirty_person,
-            visit=tables.visit,
-            condition=tables.condition,
-            drug=tables.drug,
-            measurement=tables.measurement,
-            note=tables.note,
-        )
+    def test_error_message_names_the_violation(self, dirty_tables):
         with pytest.raises(PipelineValidationError, match="null_gender_concept_id"):
-            _validate_cleaned(tables)
+            _validate_cleaned(dirty_tables)
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +146,7 @@ class TestLogValidationResults:
 
     def test_warns_on_violations(self, caplog):
         results = [
-            ValidationResult("person", "null_gender_concept_id", 3, [1, 2, 3]),
+            ValidationResult("person", "null_gender_concept_id", 3),
             ValidationResult("person", "dup_pk", 0),
         ]
         with caplog.at_level(logging.WARNING, logger="src.pipeline"):

@@ -107,7 +107,6 @@ class TestValidatePerson:
         df = self._person(spark, [(1, None, 1980, 8516, 38003564)])
         r = _result(validate_person(df), "null_gender_concept_id")
         assert r.count == 1
-        assert 1 in r.bad_ids
 
     def test_null_year_of_birth(self, spark):
         df = self._person(spark, [(1, 8507, None, 8516, 38003564)])
@@ -410,28 +409,31 @@ class TestValidateNote:
 # ---------------------------------------------------------------------------
 
 class TestValidateAll:
-    def test_returns_combined_results(self, spark):
-        person = spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
-        visit  = spark.createDataFrame([(10, 1, 9202, D1, D2)], VISIT_SCHEMA)
-        cond   = spark.createDataFrame([(100, 1, 201826, D1, D2)], CONDITION_SCHEMA)
-        drug   = spark.createDataFrame([(200, 1, 1503184, D1, D2, 30, 1.0)], DRUG_SCHEMA)
-        meas   = spark.createDataFrame([(300, 1, 3004410, D1, 5.5)], MEASUREMENT_SCHEMA)
-        note   = spark.createDataFrame([(400, 1, D1, "text", 10)], NOTE_SCHEMA)
+    @pytest.fixture(scope="class")
+    def clean_tables(self, spark):
+        return {
+            "person": spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA),
+            "visit":  spark.createDataFrame([(10, 1, 9202, D1, D2)], VISIT_SCHEMA),
+            "cond":   spark.createDataFrame([(100, 1, 201826, D1, D2)], CONDITION_SCHEMA),
+            "drug":   spark.createDataFrame([(200, 1, 1503184, D1, D2, 30, 1.0)], DRUG_SCHEMA),
+            "meas":   spark.createDataFrame([(300, 1, 3004410, D1, 5.5)], MEASUREMENT_SCHEMA),
+            "note":   spark.createDataFrame([(400, 1, D1, "text", 10)], NOTE_SCHEMA),
+        }
 
-        results = validate_all(person, visit, cond, drug, meas, note)
-        assert len(results) > 0
-        assert all(r.count == 0 for r in results)
+    @pytest.fixture(scope="class")
+    def clean_results(self, clean_tables):
+        t = clean_tables
+        return validate_all(t["person"], t["visit"], t["cond"], t["drug"], t["meas"], t["note"])
 
-    def test_surfaces_violations_from_all_tables(self, spark):
-        # Inject one violation in each of two tables
-        person = spark.createDataFrame([(1, None, 1980, 8516, 38003564)], PERSON_SCHEMA)  # null gender
-        visit  = spark.createDataFrame([(10, 1, 9202, D2, D1)], VISIT_SCHEMA)  # bad date
-        cond   = spark.createDataFrame([(100, 1, 201826, D1, D2)], CONDITION_SCHEMA)
-        drug   = spark.createDataFrame([(200, 1, 1503184, D1, D2, 30, 1.0)], DRUG_SCHEMA)
-        meas   = spark.createDataFrame([(300, 1, 3004410, D1, 5.5)], MEASUREMENT_SCHEMA)
-        note   = spark.createDataFrame([(400, 1, D1, "text", 10)], NOTE_SCHEMA)
+    def test_returns_combined_results(self, clean_results):
+        assert len(clean_results) > 0
+        assert all(r.count == 0 for r in clean_results)
 
-        results = validate_all(person, visit, cond, drug, meas, note)
+    def test_surfaces_violations_from_all_tables(self, spark, clean_tables):
+        t = clean_tables
+        dirty_person = spark.createDataFrame([(1, None, 1980, 8516, 38003564)], PERSON_SCHEMA)
+        dirty_visit  = spark.createDataFrame([(10, 1, 9202, D2, D1)], VISIT_SCHEMA)
+        results = validate_all(dirty_person, dirty_visit, t["cond"], t["drug"], t["meas"], t["note"])
         violations = [r for r in results if r.count > 0]
         checks = {r.check for r in violations}
         assert "null_gender_concept_id" in checks

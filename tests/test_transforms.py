@@ -321,104 +321,74 @@ class TestCleanAll:
 # ---------------------------------------------------------------------------
 
 class TestBuildAnalyticPerson:
-    def _build(self, spark, person_rows, visit_rows=None, cond_rows=None,
-               drug_rows=None, meas_rows=None):
-        person = spark.createDataFrame(person_rows, PERSON_SCHEMA)
-        visit  = spark.createDataFrame(visit_rows or [], VISIT_SCHEMA)
-        cond   = spark.createDataFrame(cond_rows or [], CONDITION_SCHEMA)
-        drug   = spark.createDataFrame(drug_rows or [], DRUG_SCHEMA)
-        meas   = spark.createDataFrame(meas_rows or [], MEASUREMENT_SCHEMA)
-        return build_analytic_person(person, visit, cond, drug, meas)
+    @pytest.fixture(scope="class")
+    def result(self, spark):
+        """Build analytic_person once with two persons covering all test scenarios.
 
-    def test_one_row_per_person(self, spark):
-        result = self._build(
-            spark,
-            person_rows=[(1, 8507, 1980, 8516, 38003564),
-                         (2, 8532, 1990, 8516, 38003564)],
-            visit_rows=[(10, 1, VISIT_OUTPATIENT, D1, D2),
-                        (11, 1, VISIT_OUTPATIENT, D1, D2)],
-        )
-        assert result.count() == 2
+        Person 1 (id=1, year=1980): has visits, conditions, drugs, measurements.
+        Person 2 (id=2, year=1983): no clinical data — tests zero/null/false defaults.
+        """
+        person = spark.createDataFrame([
+            (1, 8507, 1980, 8516, 38003564),
+            (2, 8532, 1983, 8516, 38003564),
+        ], PERSON_SCHEMA)
+        visit = spark.createDataFrame([
+            (10, 1, VISIT_OUTPATIENT, D1, D2),
+            (11, 1, VISIT_INPATIENT,  D1, D2),
+            (12, 1, VISIT_ER,         D1, D2),
+            (13, 1, VISIT_OUTPATIENT, D1, D2),
+        ], VISIT_SCHEMA)
+        cond = spark.createDataFrame([
+            (100, 1, CONDITION_DIABETES,     D1, None),
+            (101, 1, CONDITION_HYPERTENSION, D1, None),
+        ], CONDITION_SCHEMA)
+        drug = spark.createDataFrame([
+            (200, 1, 1503184, D1, D2, 30, 1.0),
+        ], DRUG_SCHEMA)
+        meas = spark.createDataFrame([
+            (300, 1, MEASUREMENT_HBA1C, date(2019, 1, 1), 6.0),
+            (301, 1, MEASUREMENT_HBA1C, date(2021, 1, 1), 7.5),
+            (302, 1, MEASUREMENT_SBP,   D1, 120.0),
+        ], MEASUREMENT_SCHEMA)
+        rows = build_analytic_person(person, visit, cond, drug, meas).collect()
+        return {row["person_id"]: row for row in rows}
 
-    def test_age_computed_from_reference_date(self, spark):
-        # REFERENCE_DATE is 2025-01-01; year_of_birth=1980 → age=45
-        result = self._build(spark, [(1, 8507, 1980, 8516, 38003564)])
-        row = result.filter("person_id = 1").collect()[0]
-        assert row["age"] == 45
+    def test_one_row_per_person(self, result):
+        assert len(result) == 2
 
-    def test_year_of_birth_band(self, spark):
-        result = self._build(spark, [(1, 8507, 1983, 8516, 38003564)])
-        row = result.filter("person_id = 1").collect()[0]
-        assert row["year_of_birth_band"] == "1980s"
+    def test_age_computed_from_reference_date(self, result):
+        assert result[1]["age"] == 45
 
-    def test_visit_counts_aggregated(self, spark):
-        result = self._build(
-            spark,
-            person_rows=[(1, 8507, 1980, 8516, 38003564)],
-            visit_rows=[
-                (10, 1, VISIT_OUTPATIENT, D1, D2),
-                (11, 1, VISIT_INPATIENT,  D1, D2),
-                (12, 1, VISIT_ER,         D1, D2),
-                (13, 1, VISIT_OUTPATIENT, D1, D2),
-            ],
-        )
-        row = result.collect()[0]
-        assert row["total_visit_count"] == 4
-        assert row["outpatient_visit_count"] == 2
-        assert row["inpatient_visit_count"] == 1
-        assert row["er_visit_count"] == 1
+    def test_year_of_birth_band(self, result):
+        assert result[2]["year_of_birth_band"] == "1980s"
 
-    def test_condition_flags(self, spark):
-        result = self._build(
-            spark,
-            person_rows=[(1, 8507, 1980, 8516, 38003564)],
-            cond_rows=[
-                (100, 1, CONDITION_DIABETES,     D1, None),
-                (101, 1, CONDITION_HYPERTENSION, D1, None),
-            ],
-        )
-        row = result.collect()[0]
-        assert row["has_diabetes"] is True
-        assert row["has_hypertension"] is True
-        assert row["condition_count"] == 2
+    def test_visit_counts_aggregated(self, result):
+        assert result[1]["total_visit_count"] == 4
+        assert result[1]["outpatient_visit_count"] == 2
+        assert result[1]["inpatient_visit_count"] == 1
+        assert result[1]["er_visit_count"] == 1
 
-    def test_no_conditions_flags_false(self, spark):
-        result = self._build(spark, [(1, 8507, 1980, 8516, 38003564)])
-        row = result.collect()[0]
-        assert row["has_diabetes"] is False
-        assert row["has_hypertension"] is False
+    def test_condition_flags(self, result):
+        assert result[1]["has_diabetes"] is True
+        assert result[1]["has_hypertension"] is True
+        assert result[1]["condition_count"] == 2
 
-    def test_person_with_no_visits_gets_zero_counts(self, spark):
-        result = self._build(spark, [(1, 8507, 1980, 8516, 38003564)])
-        row = result.collect()[0]
-        assert row["total_visit_count"] == 0
-        assert row["outpatient_visit_count"] == 0
-        assert row["inpatient_visit_count"] == 0
-        assert row["er_visit_count"] == 0
+    def test_no_conditions_flags_false(self, result):
+        assert result[2]["has_diabetes"] is False
+        assert result[2]["has_hypertension"] is False
 
-    def test_latest_hba1c_most_recent(self, spark):
-        result = self._build(
-            spark,
-            person_rows=[(1, 8507, 1980, 8516, 38003564)],
-            meas_rows=[
-                (300, 1, MEASUREMENT_HBA1C, date(2019, 1, 1), 6.0),
-                (301, 1, MEASUREMENT_HBA1C, date(2021, 1, 1), 7.5),  # most recent
-            ],
-        )
-        row = result.collect()[0]
-        assert row["latest_hba1c"] == pytest.approx(7.5)
+    def test_person_with_no_visits_gets_zero_counts(self, result):
+        assert result[2]["total_visit_count"] == 0
+        assert result[2]["outpatient_visit_count"] == 0
+        assert result[2]["inpatient_visit_count"] == 0
+        assert result[2]["er_visit_count"] == 0
 
-    def test_latest_systolic_bp(self, spark):
-        result = self._build(
-            spark,
-            person_rows=[(1, 8507, 1980, 8516, 38003564)],
-            meas_rows=[(300, 1, MEASUREMENT_SBP, D1, 120.0)],
-        )
-        row = result.collect()[0]
-        assert row["latest_systolic_bp"] == pytest.approx(120.0)
+    def test_latest_hba1c_most_recent(self, result):
+        assert result[1]["latest_hba1c"] == pytest.approx(7.5)
 
-    def test_no_measurements_gives_null_hba1c(self, spark):
-        result = self._build(spark, [(1, 8507, 1980, 8516, 38003564)])
-        row = result.collect()[0]
-        assert row["latest_hba1c"] is None
-        assert row["latest_systolic_bp"] is None
+    def test_latest_systolic_bp(self, result):
+        assert result[1]["latest_systolic_bp"] == pytest.approx(120.0)
+
+    def test_no_measurements_gives_null_hba1c(self, result):
+        assert result[2]["latest_hba1c"] is None
+        assert result[2]["latest_systolic_bp"] is None
