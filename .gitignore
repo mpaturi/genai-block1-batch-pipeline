@@ -17,10 +17,6 @@ __pycache__/
 .vscode/
 .idea/
 
-# Logs
-logs/
-*.log
-
 # Local data (keep these out of git; tiny test fixtures in data/sample/ are committed)
 data/*
 !data/sample/
