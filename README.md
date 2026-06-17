@@ -79,17 +79,16 @@ Prerequisites:
 7. Run tests.
 8. Open the notebook demo.
 
-```powershell
+```bash
 # 1-2. Environment
 python -m venv myenv
-myenv\Scripts\activate             # Linux/macOS: source myenv/bin/activate
+source myenv/bin/activate           # Windows: myenv\Scripts\activate
 pip install -r requirements.txt
 
 # 3-6. Run everything end-to-end (Synthea → generator → pipeline)
-./scripts/run_all.ps1
+python scripts/run_all.py
 
 # Or run each step individually:
-# ./scripts/run_synthea.ps1          # one-time Synthea export (requires Java 21)
 # python -m src.generator            # map Synthea CSV → data/raw/
 # python -m src.pipeline             # validate → clean → transform → data/processed/
 
@@ -176,7 +175,7 @@ Block 1 was built across 13 phases (0–12), each delivered as a separate branch
 | 9 | Pipeline orchestration — `src/pipeline.py` |
 | 10 | Tests — 103 pytest tests |
 | 11 | Demo notebook — `notebooks/demo.ipynb` |
-| 12 | Polish — docs cleanup, `run_all.ps1`, final fixes |
+| 12 | Polish — docs cleanup, `run_all.py`, final fixes |
 
 ## Status
 
