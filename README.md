@@ -81,6 +81,22 @@ pytest
 jupyter notebook notebooks/demo.ipynb
 ```
 
+## Expected row counts
+
+Data is generated with a fixed seed (`RANDOM_SEED=42`), so row counts are deterministic. After running the pipeline, your `data/processed/pipeline_metrics.json` should match these counts exactly.
+
+| Table | Raw | Cleaned | Dropped |
+|---|---:|---:|---:|
+| person | 11,770 | 11,424 | 346 |
+| visit_occurrence | 23,541 | 22,175 | 1,366 |
+| condition_occurrence | 5,037 | 4,817 | 220 |
+| drug_exposure | 4,564 | 4,223 | 341 |
+| measurement | 24,431 | 22,639 | 1,792 |
+| note | 46,729 | 22,847 | 23,882 |
+| **analytic_person** | — | **11,424** | — |
+
+Raw validation detects 21 check failures across the 6 tables. After cleaning, all checks pass with 0 violations. The full reference file is at [`data/sample/expected_metrics.json`](data/sample/expected_metrics.json).
+
 ## Data note
 
 This project uses synthetic OMOP-style healthcare data only. Bulk generated data is stored locally and is not committed to version control.
