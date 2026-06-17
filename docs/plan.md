@@ -28,7 +28,7 @@ The Block 1 flow will be:
 
 ### Prerequisites
 
-Running step 0 requires a local Java installation and the Synthea release jar (`synthea-with-dependencies.jar`). `scripts/run_synthea.ps1` wraps the invocation with the project's population size and seed.
+Running step 0 requires a local Java installation and the Synthea release jar (`synthea-with-dependencies.jar`). `scripts/run_all.py` wraps the full end-to-end flow including Synthea invocation with the project's population size and seed.
 
 ## Planned modules
 
@@ -75,7 +75,7 @@ Responsibilities:
 - write processed outputs
 
 ### `src/validations.py`
-Contains validation **detection** functions — pure checks that return per-category violation counts/row identifiers without halting the pipeline:
+Contains validation **detection** functions — pure checks that return per-category violation counts without halting the pipeline:
 - event `person_id` values exist in PERSON
 - optional `visit_occurrence_id` values exist in VISIT_OCCURRENCE
 - start/end dates are logically ordered
