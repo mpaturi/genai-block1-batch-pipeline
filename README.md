@@ -97,6 +97,19 @@ Data is generated with a fixed seed (`RANDOM_SEED=42`), so row counts are determ
 
 Raw validation detects 21 check failures across the 6 tables. After cleaning, all checks pass with 0 violations. The full reference file is at [`data/sample/expected_metrics.json`](data/sample/expected_metrics.json).
 
+### Drop reasons
+
+Rows can fail multiple checks, so individual violation counts may exceed the total dropped.
+
+| Table | Dropped | Reasons (violations detected) |
+|---|---:|---|
+| person | 346 | null `year_of_birth` (176), duplicate PK (173) |
+| visit_occurrence | 1,366 | null `visit_concept_id` (352), bad end date (350), duplicate PK (347) |
+| condition_occurrence | 220 | null `condition_concept_id` (75), bad end date (77), duplicate PK (74) |
+| drug_exposure | 341 | null `drug_concept_id` (68), bad end date (78), negative `days_supply` (69), negative `quantity` (68), duplicate PK (67) |
+| measurement | 1,792 | null `measurement_date` (366), negative `value_as_number` (367), orphan `person_id` (363), duplicate PK (361) |
+| note | 23,882 | null `note_date` (23,188), null `note_text` (23,541), orphan `visit_occurrence_id` (6), duplicate PK (23,534) |
+
 ## Data note
 
 This project uses synthetic OMOP-style healthcare data only. Bulk generated data is stored locally and is not committed to version control.
