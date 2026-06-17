@@ -10,6 +10,21 @@ A Python/PySpark batch pipeline project built on a fully synthetic OMOP-style he
 
 ![Pipeline Architecture](docs/architecture.png)
 
+## Output dataset
+
+The pipeline produces a patient-level analytics table (`analytic_person`) with one row per person, containing:
+
+- age (as of 2025-01-01) and decade band (e.g., `1980s`)
+- visit counts — total, outpatient, inpatient, and ER
+- condition count with diabetes and hypertension flags
+- drug exposure count
+- measurement count
+- latest HbA1c value
+- latest systolic blood pressure
+- latest measurement date
+
+Written as partitioned Parquet under `data/processed/`, partitioned by `year_of_birth_band`.
+
 ## Scope
 
 Block 1 includes:
@@ -113,6 +128,31 @@ Rows can fail multiple checks, so individual violation counts may exceed the tot
 | drug_exposure | 341 | null `drug_concept_id` (68), bad end date (78), negative `days_supply` (69), negative `quantity` (68), duplicate PK (67) |
 | measurement | 1,792 | null `measurement_date` (366), negative `value_as_number` (367), orphan `person_id` (363), duplicate PK (361) |
 | note | 23,882 | null `note_date` (23,188), null `note_text` (23,541), orphan `visit_occurrence_id` (6), duplicate PK (23,534) |
+
+## Tests
+
+103 tests across 3 test files, all run with `pytest` against in-memory Spark DataFrames.
+
+| File | Tests | What it covers |
+|---|---:|---|
+| `test_validations.py` | 50 | One test per validation check per table — null checks, duplicate PK, bad dates, negative values, orphan FKs, plus edge cases (e.g., null end date is allowed). Also tests `validate_all` aggregation. |
+| `test_transforms.py` | 45 | Cleaning functions for all 6 tables — verifies each drop rule (nulls, bad dates, negatives, orphans, duplicates) and edge cases (e.g., zero `days_supply` is kept, null optional FKs are kept). Also tests `clean_all` before/after metrics and `build_analytic_person` — age calculation, decade band, visit count aggregation, condition flags, latest measurement values, and null handling for persons with no data. |
+| `test_pipeline.py` | 8 | Pipeline orchestration — `PipelineValidationError` type, hard gate pass/fail behavior, error message content, and validation logging (warnings on violations, silence on clean data, stage name in log output). |
+
+### Test categories
+
+| Category | Tests | Examples |
+|---|---:|---|
+| Null checks | 27 | Required fields reject nulls; optional fields (end dates, FKs) allow them |
+| Duplicate PK | 13 | Each table's dedup logic, including the "no dup when unique" case |
+| Date order | 9 | End date before start date is rejected; equal dates are kept |
+| Negative values | 8 | Negative `days_supply`, `quantity`, `value_as_number` are dropped; zero is kept |
+| Orphan FK | 7 | Orphan `person_id` and `visit_occurrence_id` are dropped; null FKs are kept |
+| Aggregation | 10 | Visit counts by type, condition flags, latest HbA1c/BP, zero counts for persons with no data |
+| Pipeline | 8 | Hard gate pass/fail, error message content, logging behavior |
+| Integration | 3 | `validate_all` combines results, `clean_all` returns correct metrics |
+
+All tests use in-memory Spark DataFrames with minimal fixture data — no files on disk are needed.
 
 ## Data note
 
