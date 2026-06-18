@@ -71,7 +71,7 @@ docs/           project specification, plan, and tasks
 src/            pipeline modules and helper code
 tests/          pytest-based tests (103 tests)
 notebooks/      demo notebook (demo.ipynb)
-scripts/        utility scripts (run_synthea.ps1)
+scripts/        utility scripts (run_all.py)
 data/synthea_raw/  raw Synthea CSV export (git-ignored)
 data/raw/       simplified OMOP-style tables (git-ignored)
 data/processed/ analytic_person partitioned Parquet (git-ignored)
