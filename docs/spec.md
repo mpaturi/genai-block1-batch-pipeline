@@ -99,7 +99,7 @@ Columns:
 
 ### 6. NOTE
 
-Synthetic clinical note text.
+Synthetic clinical note text. This table is included to support a future RAG (Retrieval-Augmented Generation) project, where clinical notes can be embedded and retrieved for patient-specific queries.
 
 Columns:
 - `note_id` (int) — unique note identifier
