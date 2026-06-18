@@ -28,6 +28,10 @@ def get_spark_session(app_name: str = "block1-pipeline") -> SparkSession:
         SparkSession.builder
         .appName(app_name)
         .config("spark.sql.session.timeZone", "UTC")
+        .config("spark.sql.shuffle.partitions", "2")
+        .config("spark.default.parallelism", "1")
+        .config("spark.sql.adaptive.enabled", "false")
+        .config("spark.sql.execution.arrow.pyspark.enabled", "true")
         .getOrCreate()
     )
 
