@@ -175,29 +175,37 @@ class TestCleanVisitOccurrence:
 # ---------------------------------------------------------------------------
 
 class TestCleanConditionOccurrence:
-    def _df(self, spark, rows):
-        return spark.createDataFrame(rows, CONDITION_SCHEMA)
+    """One combined dataset drives clean_condition_occurrence() once via a
+    shared fixture; each test checks whether its own condition_occurrence_id
+    survived."""
 
-    def test_keeps_clean_rows(self, spark):
-        df = self._df(spark, [(100, 1, 201826, D1, D2)])
-        assert clean_condition_occurrence(df).count() == 1
+    @pytest.fixture(scope="class")
+    def survivor_ids(self, spark):
+        rows = [
+            (100, 1, 201826, D1, D2),     # clean -> survives
+            (101, None, 201826, D1, D2),  # null person_id (required field) -> dropped
+            (102, 1, 201826, D2, D1),     # bad dates (end < start) -> dropped
+            (103, 1, 201826, D1, None),   # null end date -> kept
+            (104, 1, 201826, D1, D2),     # duplicate pair -> exactly 1 survives
+            (104, 1, 201826, D1, D2),
+        ]
+        df = spark.createDataFrame(rows, CONDITION_SCHEMA)
+        return [row["condition_occurrence_id"] for row in clean_condition_occurrence(df).collect()]
 
-    def test_drops_null_required_field(self, spark):
-        df = self._df(spark, [(100, None, 201826, D1, D2)])
-        assert clean_condition_occurrence(df).count() == 0
+    def test_keeps_clean_rows(self, survivor_ids):
+        assert survivor_ids.count(100) == 1
 
-    def test_drops_bad_dates(self, spark):
-        df = self._df(spark, [(100, 1, 201826, D2, D1)])
-        assert clean_condition_occurrence(df).count() == 0
+    def test_drops_null_required_field(self, survivor_ids):
+        assert 101 not in survivor_ids
 
-    def test_keeps_null_end_date(self, spark):
-        df = self._df(spark, [(100, 1, 201826, D1, None)])
-        assert clean_condition_occurrence(df).count() == 1
+    def test_drops_bad_dates(self, survivor_ids):
+        assert 102 not in survivor_ids
 
-    def test_drops_duplicates(self, spark):
-        row = (100, 1, 201826, D1, D2)
-        df = self._df(spark, [row, row])
-        assert clean_condition_occurrence(df).count() == 1
+    def test_keeps_null_end_date(self, survivor_ids):
+        assert survivor_ids.count(103) == 1
+
+    def test_drops_duplicates(self, survivor_ids):
+        assert survivor_ids.count(104) == 1
 
 
 # ---------------------------------------------------------------------------
