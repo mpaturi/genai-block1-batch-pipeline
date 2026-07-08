@@ -92,46 +92,50 @@ def _result(results, check):
 # ---------------------------------------------------------------------------
 
 class TestValidatePerson:
-    def _person(self, spark, rows):
-        return spark.createDataFrame(rows, PERSON_SCHEMA)
+    """One combined dirty dataset covers 5 of the 6 checks in a single
+    validate_person() call; the clean-data and no-false-positive-dup cases
+    stay as separate, minimal fixtures since they test distinct datasets
+    that can't be merged without losing what they specifically prove."""
 
-    def _clean_row(self):
-        return (1, 8507, 1980, 8516, 38003564)
+    @pytest.fixture(scope="class")
+    def dirty_results(self, spark):
+        rows = [
+            (1, 8507, 1980, 8516, 38003564),   # baseline (not itself asserted on)
+            (2, None, 1980, 8516, 38003564),   # null gender_concept_id
+            (3, 8507, None, 8516, 38003564),   # null year_of_birth
+            (4, 8507, 1980, None, 38003564),   # null race_concept_id
+            (5, 8507, 1980, 8516, None),       # null ethnicity_concept_id
+            (6, 8507, 1980, 8516, 38003564),   # duplicate pair -> dup_pk
+            (6, 8507, 1980, 8516, 38003564),
+        ]
+        df = spark.createDataFrame(rows, PERSON_SCHEMA)
+        return validate_person(df)
+
+    def test_null_gender_concept_id(self, dirty_results):
+        assert _result(dirty_results, "null_gender_concept_id").count == 1
+
+    def test_null_year_of_birth(self, dirty_results):
+        assert _result(dirty_results, "null_year_of_birth").count == 1
+
+    def test_null_race_concept_id(self, dirty_results):
+        assert _result(dirty_results, "null_race_concept_id").count == 1
+
+    def test_null_ethnicity_concept_id(self, dirty_results):
+        assert _result(dirty_results, "null_ethnicity_concept_id").count == 1
+
+    def test_dup_pk(self, dirty_results):
+        assert _result(dirty_results, "dup_pk").count == 1
 
     def test_clean_data_no_violations(self, spark):
-        df = self._person(spark, [self._clean_row()])
-        results = validate_person(df)
-        assert all(r.count == 0 for r in results)
-
-    def test_null_gender_concept_id(self, spark):
-        df = self._person(spark, [(1, None, 1980, 8516, 38003564)])
-        r = _result(validate_person(df), "null_gender_concept_id")
-        assert r.count == 1
-
-    def test_null_year_of_birth(self, spark):
-        df = self._person(spark, [(1, 8507, None, 8516, 38003564)])
-        r = _result(validate_person(df), "null_year_of_birth")
-        assert r.count == 1
-
-    def test_null_race_concept_id(self, spark):
-        df = self._person(spark, [(1, 8507, 1980, None, 38003564)])
-        r = _result(validate_person(df), "null_race_concept_id")
-        assert r.count == 1
-
-    def test_null_ethnicity_concept_id(self, spark):
-        df = self._person(spark, [(1, 8507, 1980, 8516, None)])
-        r = _result(validate_person(df), "null_ethnicity_concept_id")
-        assert r.count == 1
-
-    def test_dup_pk(self, spark):
-        df = self._person(spark, [self._clean_row(), self._clean_row()])
-        r = _result(validate_person(df), "dup_pk")
-        assert r.count == 1  # one extra row
+        df = spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+        assert all(r.count == 0 for r in validate_person(df))
 
     def test_no_dup_when_unique(self, spark):
-        df = self._person(spark, [self._clean_row(), (2, 8507, 1985, 8516, 38003564)])
-        r = _result(validate_person(df), "dup_pk")
-        assert r.count == 0
+        df = spark.createDataFrame([
+            (1, 8507, 1980, 8516, 38003564),
+            (2, 8507, 1985, 8516, 38003564),
+        ], PERSON_SCHEMA)
+        assert _result(validate_person(df), "dup_pk").count == 0
 
 
 # ---------------------------------------------------------------------------
