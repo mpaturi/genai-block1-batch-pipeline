@@ -308,53 +308,52 @@ class TestValidateDrugExposure:
 # ---------------------------------------------------------------------------
 
 class TestValidateMeasurement:
-    def _meas(self, spark, rows):
-        return spark.createDataFrame(rows, MEASUREMENT_SCHEMA)
+    """One combined dirty dataset covers all 7 checks in a single
+    validate_measurement() call; clean-data stays separate since it's a
+    distinct all-valid dataset."""
 
-    def _person(self, spark):
-        return spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+    @pytest.fixture(scope="class")
+    def dirty_results(self, spark):
+        person = spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+        rows = [
+            (300, 1, 3004410, D1, 5.5),      # baseline (not itself asserted on)
+            (301, None, 3004410, D1, 5.5),   # null_person_id
+            (302, 1, None, D1, 5.5),         # null_measurement_concept_id
+            (303, 1, 3004410, None, 5.5),    # null_measurement_date
+            (304, 1, 3004410, D1, None),     # null_value_as_number
+            (305, 1, 3004410, D1, -1.0),     # neg_value_as_number
+            (306, 99, 3004410, D1, 5.5),     # orphan_person_id (person 99 not in parent)
+            (307, 1, 3004410, D1, 5.5),      # dup_pk pair
+            (307, 1, 3004410, D1, 5.5),
+        ]
+        df = spark.createDataFrame(rows, MEASUREMENT_SCHEMA)
+        return validate_measurement(df, person)
 
-    def _clean_row(self):
-        return (300, 1, 3004410, D1, 5.5)
+    def test_null_person_id(self, dirty_results):
+        assert _result(dirty_results, "null_person_id").count == 1
+
+    def test_null_measurement_concept_id(self, dirty_results):
+        assert _result(dirty_results, "null_measurement_concept_id").count == 1
+
+    def test_null_measurement_date(self, dirty_results):
+        assert _result(dirty_results, "null_measurement_date").count == 1
+
+    def test_null_value_as_number(self, dirty_results):
+        assert _result(dirty_results, "null_value_as_number").count == 1
+
+    def test_negative_value_as_number(self, dirty_results):
+        assert _result(dirty_results, "neg_value_as_number").count == 1
+
+    def test_orphan_person_id(self, dirty_results):
+        assert _result(dirty_results, "orphan_person_id").count == 1
+
+    def test_dup_pk(self, dirty_results):
+        assert _result(dirty_results, "dup_pk").count == 1
 
     def test_clean_data_no_violations(self, spark):
-        df = self._meas(spark, [self._clean_row()])
-        assert all(r.count == 0 for r in validate_measurement(df, self._person(spark)))
-
-    def test_null_person_id(self, spark):
-        df = self._meas(spark, [(300, None, 3004410, D1, 5.5)])
-        r = _result(validate_measurement(df, self._person(spark)), "null_person_id")
-        assert r.count == 1
-
-    def test_null_measurement_concept_id(self, spark):
-        df = self._meas(spark, [(300, 1, None, D1, 5.5)])
-        r = _result(validate_measurement(df, self._person(spark)), "null_measurement_concept_id")
-        assert r.count == 1
-
-    def test_null_measurement_date(self, spark):
-        df = self._meas(spark, [(300, 1, 3004410, None, 5.5)])
-        r = _result(validate_measurement(df, self._person(spark)), "null_measurement_date")
-        assert r.count == 1
-
-    def test_null_value_as_number(self, spark):
-        df = self._meas(spark, [(300, 1, 3004410, D1, None)])
-        r = _result(validate_measurement(df, self._person(spark)), "null_value_as_number")
-        assert r.count == 1
-
-    def test_negative_value_as_number(self, spark):
-        df = self._meas(spark, [(300, 1, 3004410, D1, -1.0)])
-        r = _result(validate_measurement(df, self._person(spark)), "neg_value_as_number")
-        assert r.count == 1
-
-    def test_orphan_person_id(self, spark):
-        df = self._meas(spark, [(300, 99, 3004410, D1, 5.5)])  # person 99 not in parent
-        r = _result(validate_measurement(df, self._person(spark)), "orphan_person_id")
-        assert r.count == 1
-
-    def test_dup_pk(self, spark):
-        df = self._meas(spark, [self._clean_row(), self._clean_row()])
-        r = _result(validate_measurement(df, self._person(spark)), "dup_pk")
-        assert r.count == 1
+        person = spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+        df = spark.createDataFrame([(300, 1, 3004410, D1, 5.5)], MEASUREMENT_SCHEMA)
+        assert all(r.count == 0 for r in validate_measurement(df, person))
 
 
 # ---------------------------------------------------------------------------
