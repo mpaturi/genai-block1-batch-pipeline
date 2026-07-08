@@ -17,14 +17,16 @@ _JAVA21_HOME = r"C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"
 _HADOOP_HOME = os.path.join(os.path.expanduser("~"), "hadoop")
 
 
-def get_spark_session(app_name: str = "block1-pipeline") -> SparkSession:
-    # PySpark 4.1 / Hadoop 3.4 calls Subject.getSubject(), which Java 25
-    # removed entirely.  Pin to Java 21 LTS where it still works.
+def get_spark_session(
+    app_name: str = "block1-pipeline",
+    master: str | None = None,
+    ui_enabled: bool = True,
+) -> SparkSession:
     if os.path.isdir(_JAVA21_HOME):
         os.environ["JAVA_HOME"] = _JAVA21_HOME
     if os.path.isdir(_HADOOP_HOME):
         os.environ["HADOOP_HOME"] = _HADOOP_HOME
-    return (
+    builder = (
         SparkSession.builder
         .appName(app_name)
         .config("spark.sql.session.timeZone", "UTC")
@@ -32,8 +34,11 @@ def get_spark_session(app_name: str = "block1-pipeline") -> SparkSession:
         .config("spark.default.parallelism", "1")
         .config("spark.sql.adaptive.enabled", "false")
         .config("spark.sql.execution.arrow.pyspark.enabled", "true")
-        .getOrCreate()
+        .config("spark.ui.enabled", str(ui_enabled).lower())
     )
+    if master:
+        builder = builder.master(master)
+    return builder.getOrCreate()
 
 
 def _read_csv(spark: SparkSession, filename: str, schema) -> DataFrame:
