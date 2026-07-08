@@ -48,12 +48,18 @@ def get_spark_session(
 
 
 def _read_csv(spark: SparkSession, filename: str, schema) -> DataFrame:
+    csv_path = RAW_DIR / filename
+    if not csv_path.exists():
+        raise FileNotFoundError(
+            f"Expected raw CSV not found: {csv_path}\n"
+            f"Run `python -m src.generator` (or scripts/run_all.py) first to produce data/raw/."
+        )
     return (
         spark.read
         .option("header", "true")
         .option("dateFormat", "yyyy-MM-dd")
         .schema(schema)
-        .csv(str(RAW_DIR / filename))
+        .csv(str(csv_path))
     )
 
 
