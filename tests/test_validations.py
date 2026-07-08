@@ -244,65 +244,63 @@ class TestValidateConditionOccurrence:
 # ---------------------------------------------------------------------------
 
 class TestValidateDrugExposure:
-    def _drug(self, spark, rows):
-        return spark.createDataFrame(rows, DRUG_SCHEMA)
+    """Combined dirty dataset covers 9 of 11 checks in one call; clean-data and
+    the zero-is-not-negative case stay separate to avoid two tests silently
+    asserting the exact same aggregate value under different names."""
 
-    def _clean_row(self):
-        return (200, 1, 1503184, D1, D2, 30, 1.0)
+    @pytest.fixture(scope="class")
+    def dirty_results(self, spark):
+        rows = [
+            (200, 1, 1503184, D1, D2, 30, 1.0),      # baseline (not itself asserted on)
+            (201, None, 1503184, D1, D2, 30, 1.0),   # null_person_id
+            (202, 1, None, D1, D2, 30, 1.0),          # null_drug_concept_id
+            (203, 1, 1503184, None, D2, 30, 1.0),     # null_drug_exposure_start_date
+            (204, 1, 1503184, D1, D2, None, 1.0),     # null_days_supply
+            (205, 1, 1503184, D1, D2, 30, None),      # null_quantity
+            (206, 1, 1503184, D2, D1, 30, 1.0),       # bad_date_drug_exposure_end_date
+            (207, 1, 1503184, D1, D2, -1, 1.0),       # neg_days_supply
+            (208, 1, 1503184, D1, D2, 30, -0.5),      # neg_quantity
+            (209, 1, 1503184, D1, D2, 30, 1.0),       # dup_pk pair
+            (209, 1, 1503184, D1, D2, 30, 1.0),
+        ]
+        df = spark.createDataFrame(rows, DRUG_SCHEMA)
+        return validate_drug_exposure(df)
 
-    def test_clean_data_no_violations(self, spark):
-        df = self._drug(spark, [self._clean_row()])
-        assert all(r.count == 0 for r in validate_drug_exposure(df))
+    def test_null_person_id(self, dirty_results):
+        assert _result(dirty_results, "null_person_id").count == 1
 
-    def test_null_person_id(self, spark):
-        df = self._drug(spark, [(200, None, 1503184, D1, D2, 30, 1.0)])
-        r = _result(validate_drug_exposure(df), "null_person_id")
-        assert r.count == 1
+    def test_null_drug_concept_id(self, dirty_results):
+        assert _result(dirty_results, "null_drug_concept_id").count == 1
 
-    def test_null_drug_concept_id(self, spark):
-        df = self._drug(spark, [(200, 1, None, D1, D2, 30, 1.0)])
-        r = _result(validate_drug_exposure(df), "null_drug_concept_id")
-        assert r.count == 1
+    def test_null_drug_exposure_start_date(self, dirty_results):
+        assert _result(dirty_results, "null_drug_exposure_start_date").count == 1
 
-    def test_null_drug_exposure_start_date(self, spark):
-        df = self._drug(spark, [(200, 1, 1503184, None, D2, 30, 1.0)])
-        r = _result(validate_drug_exposure(df), "null_drug_exposure_start_date")
-        assert r.count == 1
+    def test_null_days_supply(self, dirty_results):
+        assert _result(dirty_results, "null_days_supply").count == 1
 
-    def test_null_days_supply(self, spark):
-        df = self._drug(spark, [(200, 1, 1503184, D1, D2, None, 1.0)])
-        r = _result(validate_drug_exposure(df), "null_days_supply")
-        assert r.count == 1
+    def test_null_quantity(self, dirty_results):
+        assert _result(dirty_results, "null_quantity").count == 1
 
-    def test_null_quantity(self, spark):
-        df = self._drug(spark, [(200, 1, 1503184, D1, D2, 30, None)])
-        r = _result(validate_drug_exposure(df), "null_quantity")
-        assert r.count == 1
+    def test_bad_date_end_before_start(self, dirty_results):
+        assert _result(dirty_results, "bad_date_drug_exposure_end_date").count == 1
 
-    def test_bad_date_end_before_start(self, spark):
-        df = self._drug(spark, [(200, 1, 1503184, D2, D1, 30, 1.0)])
-        r = _result(validate_drug_exposure(df), "bad_date_drug_exposure_end_date")
-        assert r.count == 1
+    def test_negative_days_supply(self, dirty_results):
+        assert _result(dirty_results, "neg_days_supply").count == 1
 
-    def test_negative_days_supply(self, spark):
-        df = self._drug(spark, [(200, 1, 1503184, D1, D2, -1, 1.0)])
-        r = _result(validate_drug_exposure(df), "neg_days_supply")
-        assert r.count == 1
+    def test_negative_quantity(self, dirty_results):
+        assert _result(dirty_results, "neg_quantity").count == 1
 
-    def test_negative_quantity(self, spark):
-        df = self._drug(spark, [(200, 1, 1503184, D1, D2, 30, -0.5)])
-        r = _result(validate_drug_exposure(df), "neg_quantity")
-        assert r.count == 1
+    def test_dup_pk(self, dirty_results):
+        assert _result(dirty_results, "dup_pk").count == 1
 
     def test_zero_days_supply_is_not_negative(self, spark):
-        df = self._drug(spark, [(200, 1, 1503184, D1, D2, 0, 1.0)])
+        df = spark.createDataFrame([(200, 1, 1503184, D1, D2, 0, 1.0)], DRUG_SCHEMA)
         r = _result(validate_drug_exposure(df), "neg_days_supply")
         assert r.count == 0
 
-    def test_dup_pk(self, spark):
-        df = self._drug(spark, [self._clean_row(), self._clean_row()])
-        r = _result(validate_drug_exposure(df), "dup_pk")
-        assert r.count == 1
+    def test_clean_data_no_violations(self, spark):
+        df = spark.createDataFrame([(200, 1, 1503184, D1, D2, 30, 1.0)], DRUG_SCHEMA)
+        assert all(r.count == 0 for r in validate_drug_exposure(df))
 
 
 # ---------------------------------------------------------------------------
