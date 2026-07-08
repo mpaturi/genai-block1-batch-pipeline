@@ -11,7 +11,10 @@ import random
 import pandas as pd
 
 from src.config import (
+    DEFAULT_DAYS_SUPPLY,
+    DEFAULT_QUANTITY,
     DIRTY_DATA_FRACTION,
+    MIN_DAYS_SUPPLY,
     RANDOM_SEED,
     RAW_DIR,
     SYNTHEA_RAW_DIR,
@@ -153,9 +156,9 @@ def _map_drug_exposure(person_id_map: dict[str, int], included_encounter_uuids: 
     # days_supply: derive from date diff; clamp to minimum 1 to avoid 0-day dispenses
     start_dt = pd.to_datetime(df["START"], errors="coerce")
     stop_dt = pd.to_datetime(df["STOP"], errors="coerce")
-    df["days_supply"] = (stop_dt - start_dt).dt.days.fillna(30).clip(lower=1).astype(int)
+    df["days_supply"] = (stop_dt - start_dt).dt.days.fillna(DEFAULT_DAYS_SUPPLY).clip(lower=MIN_DAYS_SUPPLY).astype(int)
 
-    df["quantity"] = pd.to_numeric(df["DISPENSES"], errors="coerce").fillna(1.0)
+    df["quantity"] = pd.to_numeric(df["DISPENSES"], errors="coerce").fillna(DEFAULT_QUANTITY)
 
     before = len(df)
     df = df.dropna(subset=["person_id", "drug_exposure_start_date"])

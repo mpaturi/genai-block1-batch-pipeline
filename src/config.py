@@ -20,6 +20,12 @@ VISITS_PER_PERSON = 2
 # Share of rows injected with each dirty-data issue category (Phase 5)
 DIRTY_DATA_FRACTION = 0.015
 
+# Fallback values used when Synthea's medication dates/dispense counts are
+# missing (see src/generator.py::_map_drug_exposure)
+DEFAULT_DAYS_SUPPLY = 30   # assumed days_supply when start/stop dates can't be diffed
+MIN_DAYS_SUPPLY = 1        # clamp floor — avoids 0-day dispenses
+DEFAULT_QUANTITY = 1.0     # assumed quantity when DISPENSES is missing/non-numeric
+
 # Paths
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
