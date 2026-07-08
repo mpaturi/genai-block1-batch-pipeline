@@ -31,7 +31,13 @@ from src.concepts import (
 
 def _csv(name: str) -> pd.DataFrame:
     """Read a Synthea CSV by table name (no extension)."""
-    return pd.read_csv(SYNTHEA_RAW_DIR / "csv" / f"{name}.csv", dtype=str)
+    path = SYNTHEA_RAW_DIR / "csv" / f"{name}.csv"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Expected Synthea export not found: {path}\n"
+            f"Run Synthea first (see scripts/run_all.py) to populate data/synthea_raw/csv/."
+        )
+    return pd.read_csv(path, dtype=str)
 
 
 def _map_person() -> tuple[pd.DataFrame, dict[str, int]]:
