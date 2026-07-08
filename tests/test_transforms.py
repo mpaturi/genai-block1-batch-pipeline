@@ -90,36 +90,42 @@ D2 = date(2020, 6, 1)
 # ---------------------------------------------------------------------------
 
 class TestCleanPerson:
-    def _df(self, spark, rows):
-        return spark.createDataFrame(rows, PERSON_SCHEMA)
+    """One combined dataset (clean row + 4 null-field cases + a duplicate
+    pair) drives clean_person() once via a shared fixture; each test checks
+    whether its own person_id survived, instead of re-running clean_person()
+    per scenario."""
 
-    def test_keeps_clean_rows(self, spark):
-        df = self._df(spark, [(1, 8507, 1980, 8516, 38003564)])
-        assert clean_person(df).count() == 1
+    @pytest.fixture(scope="class")
+    def survivor_ids(self, spark):
+        rows = [
+            (1, 8507, 1980, 8516, 38003564),   # clean -> survives
+            (2, None, 1980, 8516, 38003564),   # null gender_concept_id -> dropped
+            (3, 8507, None, 8516, 38003564),   # null year_of_birth -> dropped
+            (4, 8507, 1980, None, 38003564),   # null race_concept_id -> dropped
+            (5, 8507, 1980, 8516, None),       # null ethnicity_concept_id -> dropped
+            (6, 8507, 1980, 8516, 38003564),   # duplicate pair -> exactly 1 survives
+            (6, 8507, 1980, 8516, 38003564),
+        ]
+        df = spark.createDataFrame(rows, PERSON_SCHEMA)
+        return [row["person_id"] for row in clean_person(df).collect()]
 
-    def test_drops_null_required_field(self, spark):
-        df = self._df(spark, [
-            (1, 8507, 1980, 8516, 38003564),
-            (2, None, 1980, 8516, 38003564),  # null gender
-        ])
-        assert clean_person(df).count() == 1
+    def test_keeps_clean_rows(self, survivor_ids):
+        assert survivor_ids.count(1) == 1
 
-    def test_drops_duplicates(self, spark):
-        row = (1, 8507, 1980, 8516, 38003564)
-        df = self._df(spark, [row, row])
-        assert clean_person(df).count() == 1
+    def test_drops_null_required_field(self, survivor_ids):
+        assert 2 not in survivor_ids
 
-    def test_drops_null_year_of_birth(self, spark):
-        df = self._df(spark, [(1, 8507, None, 8516, 38003564)])
-        assert clean_person(df).count() == 0
+    def test_drops_null_year_of_birth(self, survivor_ids):
+        assert 3 not in survivor_ids
 
-    def test_drops_null_race_concept_id(self, spark):
-        df = self._df(spark, [(1, 8507, 1980, None, 38003564)])
-        assert clean_person(df).count() == 0
+    def test_drops_null_race_concept_id(self, survivor_ids):
+        assert 4 not in survivor_ids
 
-    def test_drops_null_ethnicity_concept_id(self, spark):
-        df = self._df(spark, [(1, 8507, 1980, 8516, None)])
-        assert clean_person(df).count() == 0
+    def test_drops_null_ethnicity_concept_id(self, survivor_ids):
+        assert 5 not in survivor_ids
+
+    def test_drops_duplicates(self, survivor_ids):
+        assert survivor_ids.count(6) == 1
 
 
 # ---------------------------------------------------------------------------
