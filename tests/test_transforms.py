@@ -213,37 +213,44 @@ class TestCleanConditionOccurrence:
 # ---------------------------------------------------------------------------
 
 class TestCleanDrugExposure:
-    def _df(self, spark, rows):
-        return spark.createDataFrame(rows, DRUG_SCHEMA)
+    """One combined dataset drives clean_drug_exposure() once via a shared
+    fixture; each test checks whether its own drug_exposure_id survived."""
 
-    def test_keeps_clean_rows(self, spark):
-        df = self._df(spark, [(200, 1, 1503184, D1, D2, 30, 1.0)])
-        assert clean_drug_exposure(df).count() == 1
+    @pytest.fixture(scope="class")
+    def survivor_ids(self, spark):
+        rows = [
+            (200, 1, 1503184, D1, D2, 30, 1.0),    # clean -> survives
+            (201, None, 1503184, D1, D2, 30, 1.0), # null person_id (required field) -> dropped
+            (202, 1, 1503184, D2, D1, 30, 1.0),    # bad dates (end < start) -> dropped
+            (203, 1, 1503184, D1, D2, -1, 1.0),    # negative days_supply -> dropped
+            (204, 1, 1503184, D1, D2, 30, -0.5),   # negative quantity -> dropped
+            (205, 1, 1503184, D1, D2, 0, 1.0),     # zero days_supply -> kept
+            (206, 1, 1503184, D1, D2, 30, 1.0),    # duplicate pair -> exactly 1 survives
+            (206, 1, 1503184, D1, D2, 30, 1.0),
+        ]
+        df = spark.createDataFrame(rows, DRUG_SCHEMA)
+        return [row["drug_exposure_id"] for row in clean_drug_exposure(df).collect()]
 
-    def test_drops_null_required_field(self, spark):
-        df = self._df(spark, [(200, None, 1503184, D1, D2, 30, 1.0)])
-        assert clean_drug_exposure(df).count() == 0
+    def test_keeps_clean_rows(self, survivor_ids):
+        assert survivor_ids.count(200) == 1
 
-    def test_drops_bad_dates(self, spark):
-        df = self._df(spark, [(200, 1, 1503184, D2, D1, 30, 1.0)])
-        assert clean_drug_exposure(df).count() == 0
+    def test_drops_null_required_field(self, survivor_ids):
+        assert 201 not in survivor_ids
 
-    def test_drops_negative_days_supply(self, spark):
-        df = self._df(spark, [(200, 1, 1503184, D1, D2, -1, 1.0)])
-        assert clean_drug_exposure(df).count() == 0
+    def test_drops_bad_dates(self, survivor_ids):
+        assert 202 not in survivor_ids
 
-    def test_drops_negative_quantity(self, spark):
-        df = self._df(spark, [(200, 1, 1503184, D1, D2, 30, -0.5)])
-        assert clean_drug_exposure(df).count() == 0
+    def test_drops_negative_days_supply(self, survivor_ids):
+        assert 203 not in survivor_ids
 
-    def test_keeps_zero_days_supply(self, spark):
-        df = self._df(spark, [(200, 1, 1503184, D1, D2, 0, 1.0)])
-        assert clean_drug_exposure(df).count() == 1
+    def test_drops_negative_quantity(self, survivor_ids):
+        assert 204 not in survivor_ids
 
-    def test_drops_duplicates(self, spark):
-        row = (200, 1, 1503184, D1, D2, 30, 1.0)
-        df = self._df(spark, [row, row])
-        assert clean_drug_exposure(df).count() == 1
+    def test_keeps_zero_days_supply(self, survivor_ids):
+        assert survivor_ids.count(205) == 1
+
+    def test_drops_duplicates(self, survivor_ids):
+        assert survivor_ids.count(206) == 1
 
 
 # ---------------------------------------------------------------------------
