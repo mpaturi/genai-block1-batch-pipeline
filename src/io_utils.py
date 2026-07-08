@@ -87,6 +87,21 @@ def write_parquet(
     partition_by: list[str] | None = None,
     mode: str = "overwrite",
 ) -> None:
+    """Write a DataFrame to partitioned Parquet.
+
+    On Windows, falls back to a pandas/PyArrow writer instead of Spark's
+    native writer, because Spark's local filesystem writes on Windows require
+    winutils.exe (a native Hadoop helper) to avoid NativeIO errors. This
+    fallback pulls the ENTIRE DataFrame into driver memory via toPandas(),
+    which only works because this project's data is small (~10k-100k rows) —
+    it would not scale to real production data volumes.
+
+    On Mac/Linux, platform.system() != "Windows", so this always uses Spark's
+    native distributed writer instead — no winutils dependency, no driver-
+    memory bottleneck. Note that the two paths produce physically different
+    Parquet file layouts (naming, _SUCCESS marker) for the same logical data,
+    since one is Spark's writer and the other is PyArrow's.
+    """
     import platform
     if platform.system() == "Windows":
         _write_parquet_pandas(df, path, partition_by, mode)
