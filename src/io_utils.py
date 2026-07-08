@@ -13,8 +13,14 @@ from pyspark.sql import DataFrame, SparkSession
 from src import schemas
 from src.config import PROCESSED_DIR, RAW_DIR
 
-_JAVA21_HOME = r"C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"
-_HADOOP_HOME = os.path.join(os.path.expanduser("~"), "hadoop")
+# Both can be overridden via env vars for portability across machines;
+# defaults below match this project's local dev setup.
+_JAVA21_HOME = os.environ.get(
+    "BLOCK1_JAVA21_HOME", r"C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"
+)
+_HADOOP_HOME = os.environ.get(
+    "BLOCK1_HADOOP_HOME", os.path.join(os.path.expanduser("~"), "hadoop")
+)
 
 
 def get_spark_session(
