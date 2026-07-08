@@ -296,32 +296,37 @@ class TestCleanMeasurement:
 # ---------------------------------------------------------------------------
 
 class TestCleanNote:
-    def _note(self, spark, rows):
-        return spark.createDataFrame(rows, NOTE_SCHEMA)
+    """One combined dataset drives clean_note() once via a shared fixture;
+    each test checks whether its own note_id survived."""
 
-    def _visit(self, spark):
-        return spark.createDataFrame([(10, 1, 9202, D1, D2)], VISIT_SCHEMA)
+    @pytest.fixture(scope="class")
+    def survivor_ids(self, spark):
+        visit = spark.createDataFrame([(10, 1, 9202, D1, D2)], VISIT_SCHEMA)
+        rows = [
+            (400, 1, D1, "text", 10),    # clean -> survives
+            (401, 1, D1, None, 10),      # null note_text (required field) -> dropped
+            (402, 1, D1, "text", 99),    # orphan visit_occurrence_id -> dropped
+            (403, 1, D1, "text", None),  # null visit_occurrence_id -> kept
+            (404, 1, D1, "text", 10),    # duplicate pair -> exactly 1 survives
+            (404, 1, D1, "text", 10),
+        ]
+        df = spark.createDataFrame(rows, NOTE_SCHEMA)
+        return [row["note_id"] for row in clean_note(df, visit).collect()]
 
-    def test_keeps_clean_rows(self, spark):
-        df = self._note(spark, [(400, 1, D1, "text", 10)])
-        assert clean_note(df, self._visit(spark)).count() == 1
+    def test_keeps_clean_rows(self, survivor_ids):
+        assert survivor_ids.count(400) == 1
 
-    def test_drops_null_required_field(self, spark):
-        df = self._note(spark, [(400, 1, D1, None, 10)])
-        assert clean_note(df, self._visit(spark)).count() == 0
+    def test_drops_null_required_field(self, survivor_ids):
+        assert 401 not in survivor_ids
 
-    def test_drops_orphan_visit(self, spark):
-        df = self._note(spark, [(400, 1, D1, "text", 99)])  # visit 99 absent
-        assert clean_note(df, self._visit(spark)).count() == 0
+    def test_drops_orphan_visit(self, survivor_ids):
+        assert 402 not in survivor_ids
 
-    def test_keeps_null_visit_occurrence_id(self, spark):
-        df = self._note(spark, [(400, 1, D1, "text", None)])
-        assert clean_note(df, self._visit(spark)).count() == 1
+    def test_keeps_null_visit_occurrence_id(self, survivor_ids):
+        assert survivor_ids.count(403) == 1
 
-    def test_drops_duplicates(self, spark):
-        row = (400, 1, D1, "text", 10)
-        df = self._note(spark, [row, row])
-        assert clean_note(df, self._visit(spark)).count() == 1
+    def test_drops_duplicates(self, survivor_ids):
+        assert survivor_ids.count(404) == 1
 
 
 # ---------------------------------------------------------------------------
