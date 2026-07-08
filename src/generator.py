@@ -6,8 +6,10 @@ data/raw/.
 Run directly:  python -m src.generator
 """
 
+import json
 import logging
 import random
+from datetime import datetime, timezone
 
 import pandas as pd
 
@@ -18,6 +20,7 @@ from src.config import (
     MIN_DAYS_SUPPLY,
     RANDOM_SEED,
     RAW_DIR,
+    REFERENCE_DATE,
     SYNTHEA_RAW_DIR,
     TOTAL_ROW_BUDGET,
     VISITS_PER_PERSON,
@@ -354,6 +357,29 @@ def _inject_dirty_data(
     return person, visit, condition, drug, measurement, note
 
 
+def _write_manifest(person, visit, condition, drug, measurement, note) -> None:
+    """Write a small manifest alongside data/raw/ so staleness (e.g. a table
+    left over from a previous run with a different population size) is
+    visible at a glance instead of discovered by accident."""
+    manifest = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "random_seed": RANDOM_SEED,
+        "reference_date": REFERENCE_DATE.isoformat(),
+        "row_counts": {
+            "person": len(person),
+            "visit_occurrence": len(visit),
+            "condition_occurrence": len(condition),
+            "drug_exposure": len(drug),
+            "measurement": len(measurement),
+            "note": len(note),
+        },
+    }
+    path = RAW_DIR / "_manifest.json"
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    log.info("[MANIFEST] written to %s", path)
+
+
 def generate() -> None:
     """Build all 6 raw tables, inject dirty data, and write CSVs to data/raw/."""
     RAW_DIR.mkdir(parents=True, exist_ok=True)
@@ -394,6 +420,8 @@ def generate() -> None:
     log.info("[BUDGET] total rows written: %d (target budget ~%d)", total_rows, TOTAL_ROW_BUDGET)
     if total_rows > TOTAL_ROW_BUDGET * 1.5:
         log.warning("[BUDGET] total rows (%d) significantly exceed target budget (%d)", total_rows, TOTAL_ROW_BUDGET)
+
+    _write_manifest(person, visit, condition, drug, measurement, note)
 
 
 if __name__ == "__main__":
