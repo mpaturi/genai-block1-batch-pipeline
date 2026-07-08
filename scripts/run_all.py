@@ -11,6 +11,10 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))  # allow `from src.config import ...` when run directly as a script
+
+from src.config import NUM_PERSONS  # noqa: E402 (must come after the sys.path fix above)
+
 JAR_PATH = PROJECT_ROOT / "tools" / "synthea-with-dependencies.jar"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "synthea_raw"
 
@@ -25,7 +29,7 @@ def _run(description, cmd):
 
 def main():
     parser = argparse.ArgumentParser(description="Run full Block 1 pipeline end-to-end")
-    parser.add_argument("--population", type=int, default=10000)
+    parser.add_argument("--population", type=int, default=NUM_PERSONS)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--reference-date", default="20250101")
     args = parser.parse_args()

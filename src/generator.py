@@ -10,7 +10,14 @@ import random
 
 import pandas as pd
 
-from src.config import DIRTY_DATA_FRACTION, RANDOM_SEED, RAW_DIR, SYNTHEA_RAW_DIR, VISITS_PER_PERSON
+from src.config import (
+    DIRTY_DATA_FRACTION,
+    RANDOM_SEED,
+    RAW_DIR,
+    SYNTHEA_RAW_DIR,
+    TOTAL_ROW_BUDGET,
+    VISITS_PER_PERSON,
+)
 from src.concepts import (
     CONDITION_CONCEPT_ID,
     DRUG_CONCEPT_ID,
@@ -361,6 +368,11 @@ def generate() -> None:
 
     note.to_csv(RAW_DIR / "note.csv", index=False)
     print(f"[NOTE] {len(note):,} rows -> data/raw/note.csv")
+
+    total_rows = len(person) + len(visit) + len(condition) + len(drug) + len(measurement) + len(note)
+    print(f"[BUDGET] total rows written: {total_rows:,} (target budget ~{TOTAL_ROW_BUDGET:,})")
+    if total_rows > TOTAL_ROW_BUDGET * 1.5:
+        print(f"[BUDGET] WARNING: total rows ({total_rows:,}) significantly exceed target budget ({TOTAL_ROW_BUDGET:,})")
 
 
 if __name__ == "__main__":
