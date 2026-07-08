@@ -361,48 +361,50 @@ class TestValidateMeasurement:
 # ---------------------------------------------------------------------------
 
 class TestValidateNote:
-    def _note(self, spark, rows):
-        return spark.createDataFrame(rows, NOTE_SCHEMA)
+    """Combined dirty dataset covers 5 of 7 checks in one call; clean-data and
+    the null-visit-id-allowed case stay separate to avoid two tests silently
+    asserting the exact same aggregate value under different names."""
 
-    def _visit(self, spark):
-        return spark.createDataFrame([(10, 1, 9202, D1, D2)], VISIT_SCHEMA)
+    @pytest.fixture(scope="class")
+    def dirty_results(self, spark):
+        visit = spark.createDataFrame([(10, 1, 9202, D1, D2)], VISIT_SCHEMA)
+        rows = [
+            (400, 1, D1, "note text", 10),   # baseline (not itself asserted on)
+            (401, None, D1, "text", 10),     # null_person_id
+            (402, 1, None, "text", 10),      # null_note_date
+            (403, 1, D1, None, 10),          # null_note_text
+            (404, 1, D1, "text", 99),        # orphan_visit_occurrence_id (visit 99 not in parent)
+            (405, 1, D1, "text", 10),        # dup_pk pair
+            (405, 1, D1, "text", 10),
+        ]
+        df = spark.createDataFrame(rows, NOTE_SCHEMA)
+        return validate_note(df, visit)
 
-    def _clean_row(self):
-        return (400, 1, D1, "note text", 10)
+    def test_null_person_id(self, dirty_results):
+        assert _result(dirty_results, "null_person_id").count == 1
 
-    def test_clean_data_no_violations(self, spark):
-        df = self._note(spark, [self._clean_row()])
-        assert all(r.count == 0 for r in validate_note(df, self._visit(spark)))
+    def test_null_note_date(self, dirty_results):
+        assert _result(dirty_results, "null_note_date").count == 1
 
-    def test_null_person_id(self, spark):
-        df = self._note(spark, [(400, None, D1, "text", 10)])
-        r = _result(validate_note(df, self._visit(spark)), "null_person_id")
-        assert r.count == 1
+    def test_null_note_text(self, dirty_results):
+        assert _result(dirty_results, "null_note_text").count == 1
 
-    def test_null_note_date(self, spark):
-        df = self._note(spark, [(400, 1, None, "text", 10)])
-        r = _result(validate_note(df, self._visit(spark)), "null_note_date")
-        assert r.count == 1
+    def test_orphan_visit_occurrence_id(self, dirty_results):
+        assert _result(dirty_results, "orphan_visit_occurrence_id").count == 1
 
-    def test_null_note_text(self, spark):
-        df = self._note(spark, [(400, 1, D1, None, 10)])
-        r = _result(validate_note(df, self._visit(spark)), "null_note_text")
-        assert r.count == 1
-
-    def test_orphan_visit_occurrence_id(self, spark):
-        df = self._note(spark, [(400, 1, D1, "text", 99)])  # visit 99 not in parent
-        r = _result(validate_note(df, self._visit(spark)), "orphan_visit_occurrence_id")
-        assert r.count == 1
+    def test_dup_pk(self, dirty_results):
+        assert _result(dirty_results, "dup_pk").count == 1
 
     def test_null_visit_occurrence_id_is_allowed(self, spark):
-        df = self._note(spark, [(400, 1, D1, "text", None)])
-        r = _result(validate_note(df, self._visit(spark)), "orphan_visit_occurrence_id")
+        visit = spark.createDataFrame([(10, 1, 9202, D1, D2)], VISIT_SCHEMA)
+        df = spark.createDataFrame([(400, 1, D1, "text", None)], NOTE_SCHEMA)
+        r = _result(validate_note(df, visit), "orphan_visit_occurrence_id")
         assert r.count == 0
 
-    def test_dup_pk(self, spark):
-        df = self._note(spark, [self._clean_row(), self._clean_row()])
-        r = _result(validate_note(df, self._visit(spark)), "dup_pk")
-        assert r.count == 1
+    def test_clean_data_no_violations(self, spark):
+        visit = spark.createDataFrame([(10, 1, 9202, D1, D2)], VISIT_SCHEMA)
+        df = spark.createDataFrame([(400, 1, D1, "note text", 10)], NOTE_SCHEMA)
+        assert all(r.count == 0 for r in validate_note(df, visit))
 
 
 # ---------------------------------------------------------------------------
