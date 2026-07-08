@@ -50,7 +50,7 @@ def _map_person() -> tuple[pd.DataFrame, dict[str, int]]:
 
     person_id_map = {uuid: i + 1 for i, uuid in enumerate(df["Id"])}
     df["person_id"] = df["Id"].map(person_id_map).astype(int)
-    df["gender_concept_id"] = df["GENDER"].map(GENDER_CONCEPT_ID)
+    df["gender_concept_id"] = df["GENDER"].str.upper().map(GENDER_CONCEPT_ID)
     df["race_concept_id"] = df["RACE"].str.lower().map(RACE_CONCEPT_ID)
     df["ethnicity_concept_id"] = df["ETHNICITY"].str.lower().map(ETHNICITY_CONCEPT_ID)
     df["year_of_birth"] = pd.to_datetime(df["BIRTHDATE"]).dt.year.astype(int)
