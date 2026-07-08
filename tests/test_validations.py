@@ -143,54 +143,52 @@ class TestValidatePerson:
 # ---------------------------------------------------------------------------
 
 class TestValidateVisitOccurrence:
-    def _visit(self, spark, rows):
-        return spark.createDataFrame(rows, VISIT_SCHEMA)
+    """One combined dirty dataset covers 6 of the 7 checks in a single
+    validate_visit_occurrence() call; clean-data stays separate since it's
+    a distinct all-valid dataset."""
 
-    def _person(self, spark):
-        return spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+    @pytest.fixture(scope="class")
+    def dirty_results(self, spark):
+        person = spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+        rows = [
+            (10, 1, 9202, D1, D2),      # baseline (not itself asserted on)
+            (11, None, 9202, D1, D2),   # null_person_id
+            (12, 1, None, D1, D2),      # null_visit_concept_id
+            (13, 1, 9202, None, D2),    # null_visit_start_date
+            (14, 1, 9202, D1, None),    # null_visit_end_date
+            (15, 1, 9202, D2, D1),      # bad_date_visit_end_date (end < start)
+            (16, 99, 9202, D1, D2),     # orphan_person_id (person 99 not in parent)
+            (17, 1, 9202, D1, D2),      # dup_pk pair
+            (17, 1, 9202, D1, D2),
+        ]
+        df = spark.createDataFrame(rows, VISIT_SCHEMA)
+        return validate_visit_occurrence(df, person)
 
-    def _clean_row(self):
-        return (10, 1, 9202, D1, D2)
+    def test_null_person_id(self, dirty_results):
+        assert _result(dirty_results, "null_person_id").count == 1
+
+    def test_null_visit_concept_id(self, dirty_results):
+        assert _result(dirty_results, "null_visit_concept_id").count == 1
+
+    def test_null_visit_start_date(self, dirty_results):
+        assert _result(dirty_results, "null_visit_start_date").count == 1
+
+    def test_null_visit_end_date(self, dirty_results):
+        assert _result(dirty_results, "null_visit_end_date").count == 1
+
+    def test_bad_date_end_before_start(self, dirty_results):
+        assert _result(dirty_results, "bad_date_visit_end_date").count == 1
+
+    def test_orphan_person_id(self, dirty_results):
+        assert _result(dirty_results, "orphan_person_id").count == 1
+
+    def test_dup_pk(self, dirty_results):
+        assert _result(dirty_results, "dup_pk").count == 1
 
     def test_clean_data_no_violations(self, spark):
-        df = self._visit(spark, [self._clean_row()])
-        results = validate_visit_occurrence(df, self._person(spark))
-        assert all(r.count == 0 for r in results)
-
-    def test_null_person_id(self, spark):
-        df = self._visit(spark, [(10, None, 9202, D1, D2)])
-        r = _result(validate_visit_occurrence(df, self._person(spark)), "null_person_id")
-        assert r.count == 1
-
-    def test_null_visit_concept_id(self, spark):
-        df = self._visit(spark, [(10, 1, None, D1, D2)])
-        r = _result(validate_visit_occurrence(df, self._person(spark)), "null_visit_concept_id")
-        assert r.count == 1
-
-    def test_null_visit_start_date(self, spark):
-        df = self._visit(spark, [(10, 1, 9202, None, D2)])
-        r = _result(validate_visit_occurrence(df, self._person(spark)), "null_visit_start_date")
-        assert r.count == 1
-
-    def test_null_visit_end_date(self, spark):
-        df = self._visit(spark, [(10, 1, 9202, D1, None)])
-        r = _result(validate_visit_occurrence(df, self._person(spark)), "null_visit_end_date")
-        assert r.count == 1
-
-    def test_bad_date_end_before_start(self, spark):
-        df = self._visit(spark, [(10, 1, 9202, D2, D1)])  # end < start
-        r = _result(validate_visit_occurrence(df, self._person(spark)), "bad_date_visit_end_date")
-        assert r.count == 1
-
-    def test_orphan_person_id(self, spark):
-        df = self._visit(spark, [(10, 99, 9202, D1, D2)])  # person 99 not in parent
-        r = _result(validate_visit_occurrence(df, self._person(spark)), "orphan_person_id")
-        assert r.count == 1
-
-    def test_dup_pk(self, spark):
-        df = self._visit(spark, [self._clean_row(), self._clean_row()])
-        r = _result(validate_visit_occurrence(df, self._person(spark)), "dup_pk")
-        assert r.count == 1
+        person = spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+        df = spark.createDataFrame([(10, 1, 9202, D1, D2)], VISIT_SCHEMA)
+        assert all(r.count == 0 for r in validate_visit_occurrence(df, person))
 
 
 # ---------------------------------------------------------------------------
