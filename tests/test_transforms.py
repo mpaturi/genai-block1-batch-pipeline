@@ -258,32 +258,37 @@ class TestCleanDrugExposure:
 # ---------------------------------------------------------------------------
 
 class TestCleanMeasurement:
-    def _meas(self, spark, rows):
-        return spark.createDataFrame(rows, MEASUREMENT_SCHEMA)
+    """One combined dataset drives clean_measurement() once via a shared
+    fixture; each test checks whether its own measurement_id survived."""
 
-    def _person(self, spark):
-        return spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+    @pytest.fixture(scope="class")
+    def survivor_ids(self, spark):
+        person = spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+        rows = [
+            (300, 1, 3004410, D1, 5.5),     # clean -> survives
+            (301, None, 3004410, D1, 5.5),  # null person_id (required field) -> dropped
+            (302, 1, 3004410, D1, -1.0),    # negative value_as_number -> dropped
+            (303, 99, 3004410, D1, 5.5),    # orphan person_id -> dropped
+            (304, 1, 3004410, D1, 5.5),     # duplicate pair -> exactly 1 survives
+            (304, 1, 3004410, D1, 5.5),
+        ]
+        df = spark.createDataFrame(rows, MEASUREMENT_SCHEMA)
+        return [row["measurement_id"] for row in clean_measurement(df, person).collect()]
 
-    def test_keeps_clean_rows(self, spark):
-        df = self._meas(spark, [(300, 1, 3004410, D1, 5.5)])
-        assert clean_measurement(df, self._person(spark)).count() == 1
+    def test_keeps_clean_rows(self, survivor_ids):
+        assert survivor_ids.count(300) == 1
 
-    def test_drops_null_required_field(self, spark):
-        df = self._meas(spark, [(300, None, 3004410, D1, 5.5)])
-        assert clean_measurement(df, self._person(spark)).count() == 0
+    def test_drops_null_required_field(self, survivor_ids):
+        assert 301 not in survivor_ids
 
-    def test_drops_negative_value(self, spark):
-        df = self._meas(spark, [(300, 1, 3004410, D1, -1.0)])
-        assert clean_measurement(df, self._person(spark)).count() == 0
+    def test_drops_negative_value(self, survivor_ids):
+        assert 302 not in survivor_ids
 
-    def test_drops_orphan_person_id(self, spark):
-        df = self._meas(spark, [(300, 99, 3004410, D1, 5.5)])
-        assert clean_measurement(df, self._person(spark)).count() == 0
+    def test_drops_orphan_person_id(self, survivor_ids):
+        assert 303 not in survivor_ids
 
-    def test_drops_duplicates(self, spark):
-        row = (300, 1, 3004410, D1, 5.5)
-        df = self._meas(spark, [row, row])
-        assert clean_measurement(df, self._person(spark)).count() == 1
+    def test_drops_duplicates(self, survivor_ids):
+        assert survivor_ids.count(304) == 1
 
 
 # ---------------------------------------------------------------------------
