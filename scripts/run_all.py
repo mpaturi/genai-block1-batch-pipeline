@@ -6,6 +6,7 @@ Usage:
 """
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -19,9 +20,9 @@ JAR_PATH = PROJECT_ROOT / "tools" / "synthea-with-dependencies.jar"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "synthea_raw"
 
 
-def _run(description, cmd):
+def _run(description, cmd, env=None):
     print(f"\n=== {description} ===")
-    result = subprocess.run(cmd, cwd=PROJECT_ROOT)
+    result = subprocess.run(cmd, cwd=PROJECT_ROOT, env=env)
     if result.returncode != 0:
         print(f"FAILED: {description} (exit code {result.returncode})")
         sys.exit(result.returncode)
@@ -53,13 +54,21 @@ def main():
         f"--exporter.baseDirectory={OUTPUT_DIR}",
     ])
 
+    # Propagate --seed/--reference-date to the generator/pipeline subprocesses,
+    # so they match what Synthea actually used instead of config.py's defaults.
+    child_env = os.environ.copy()
+    child_env["BLOCK1_RANDOM_SEED"] = str(args.seed)
+    child_env["BLOCK1_REFERENCE_DATE"] = (
+        f"{args.reference_date[:4]}-{args.reference_date[4:6]}-{args.reference_date[6:8]}"
+    )
+
     _run("Step 2/3: Running generator (Synthea CSV -> data/raw/)", [
         sys.executable, "-m", "src.generator",
-    ])
+    ], env=child_env)
 
     _run("Step 3/3: Running pipeline (validate -> clean -> transform -> data/processed/)", [
         sys.executable, "-m", "src.pipeline",
-    ])
+    ], env=child_env)
 
     print("\n=== All steps completed successfully ===")
 
