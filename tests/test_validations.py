@@ -196,45 +196,47 @@ class TestValidateVisitOccurrence:
 # ---------------------------------------------------------------------------
 
 class TestValidateConditionOccurrence:
-    def _cond(self, spark, rows):
-        return spark.createDataFrame(rows, CONDITION_SCHEMA)
+    """Combined dirty dataset covers 5 of 7 checks in one call; clean-data and
+    the null-end-date-allowed case stay separate since each needs its own
+    isolated dataset to precisely prove its (often negative) claim."""
 
-    def _clean_row(self):
-        return (100, 1, 201826, D1, D2)
+    @pytest.fixture(scope="class")
+    def dirty_results(self, spark):
+        rows = [
+            (100, 1, 201826, D1, D2),     # baseline (not itself asserted on)
+            (101, None, 201826, D1, D2),  # null_person_id
+            (102, 1, None, D1, D2),       # null_condition_concept_id
+            (103, 1, 201826, None, D2),   # null_condition_start_date
+            (104, 1, 201826, D2, D1),     # bad_date_condition_end_date (end<start)
+            (105, 1, 201826, D1, D2),     # dup_pk pair
+            (105, 1, 201826, D1, D2),
+        ]
+        df = spark.createDataFrame(rows, CONDITION_SCHEMA)
+        return validate_condition_occurrence(df)
 
-    def test_clean_data_no_violations(self, spark):
-        df = self._cond(spark, [self._clean_row()])
-        assert all(r.count == 0 for r in validate_condition_occurrence(df))
+    def test_null_person_id(self, dirty_results):
+        assert _result(dirty_results, "null_person_id").count == 1
 
-    def test_null_person_id(self, spark):
-        df = self._cond(spark, [(100, None, 201826, D1, D2)])
-        r = _result(validate_condition_occurrence(df), "null_person_id")
-        assert r.count == 1
+    def test_null_condition_concept_id(self, dirty_results):
+        assert _result(dirty_results, "null_condition_concept_id").count == 1
 
-    def test_null_condition_concept_id(self, spark):
-        df = self._cond(spark, [(100, 1, None, D1, D2)])
-        r = _result(validate_condition_occurrence(df), "null_condition_concept_id")
-        assert r.count == 1
+    def test_null_condition_start_date(self, dirty_results):
+        assert _result(dirty_results, "null_condition_start_date").count == 1
 
-    def test_null_condition_start_date(self, spark):
-        df = self._cond(spark, [(100, 1, 201826, None, D2)])
-        r = _result(validate_condition_occurrence(df), "null_condition_start_date")
-        assert r.count == 1
+    def test_bad_date_end_before_start(self, dirty_results):
+        assert _result(dirty_results, "bad_date_condition_end_date").count == 1
 
-    def test_bad_date_end_before_start(self, spark):
-        df = self._cond(spark, [(100, 1, 201826, D2, D1)])
-        r = _result(validate_condition_occurrence(df), "bad_date_condition_end_date")
-        assert r.count == 1
+    def test_dup_pk(self, dirty_results):
+        assert _result(dirty_results, "dup_pk").count == 1
 
     def test_null_end_date_is_allowed(self, spark):
-        df = self._cond(spark, [(100, 1, 201826, D1, None)])
+        df = spark.createDataFrame([(100, 1, 201826, D1, None)], CONDITION_SCHEMA)
         r = _result(validate_condition_occurrence(df), "bad_date_condition_end_date")
         assert r.count == 0
 
-    def test_dup_pk(self, spark):
-        df = self._cond(spark, [self._clean_row(), self._clean_row()])
-        r = _result(validate_condition_occurrence(df), "dup_pk")
-        assert r.count == 1
+    def test_clean_data_no_violations(self, spark):
+        df = spark.createDataFrame([(100, 1, 201826, D1, D2)], CONDITION_SCHEMA)
+        assert all(r.count == 0 for r in validate_condition_occurrence(df))
 
 
 # ---------------------------------------------------------------------------
