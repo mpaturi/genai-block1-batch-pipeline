@@ -56,6 +56,7 @@ def _dup_count(df: DataFrame, pk: str) -> int:
     return int(total or 0)
 
 
+# Uses left_anti directly since we only want the orphan rows themselves (for counting).
 def _orphan_count(df: DataFrame, fk_col: str, parent: DataFrame, parent_pk: str) -> int:
     parent_ids = parent.select(F.col(parent_pk).alias("_parent_pk")).distinct()
     bad = (

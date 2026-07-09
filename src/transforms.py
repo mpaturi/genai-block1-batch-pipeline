@@ -82,6 +82,8 @@ def _drop_neg(df: DataFrame, col: str) -> DataFrame:
     return df.filter(F.col(col) >= 0)
 
 
+# Uses left + filter (not left_anti) since we need to KEEP non-orphan rows here,
+# not isolate the orphan ones — a different question than validations.py's orphan count.
 def _drop_orphans(
     df: DataFrame, fk_col: str, parent: DataFrame, parent_pk: str
 ) -> DataFrame:
