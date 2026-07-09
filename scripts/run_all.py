@@ -58,9 +58,9 @@ def main():
     # so they match what Synthea actually used instead of config.py's defaults.
     child_env = os.environ.copy()
     child_env["BLOCK1_RANDOM_SEED"] = str(args.seed)
-    child_env["BLOCK1_REFERENCE_DATE"] = (
-        f"{args.reference_date[:4]}-{args.reference_date[4:6]}-{args.reference_date[6:8]}"
-    )
+    # Synthea takes YYYYMMDD (e.g. "20250101"); config.py needs YYYY-MM-DD.
+    year, month, day = args.reference_date[:4], args.reference_date[4:6], args.reference_date[6:8]
+    child_env["BLOCK1_REFERENCE_DATE"] = f"{year}-{month}-{day}"
 
     _run("Step 2/3: Running generator (Synthea CSV -> data/raw/)", [
         sys.executable, "-m", "src.generator",
