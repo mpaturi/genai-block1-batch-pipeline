@@ -4,25 +4,25 @@
       "person": 11784,
       "visit_occurrence": 23568,
       "condition_occurrence": 5055,
-      "drug_exposure": 4596,
-      "measurement": 24431,
-      "note": 46781
+      "drug_exposure": 4600,
+      "measurement": 24380,
+      "note": 46782
     },
     "cleaned": {
       "person": 11436,
-      "visit_occurrence": 22196,
+      "visit_occurrence": 22199,
       "condition_occurrence": 4836,
-      "drug_exposure": 4258,
-      "measurement": 22663,
+      "drug_exposure": 4262,
+      "measurement": 22668,
       "note": 22872
     },
     "dropped": {
       "person": 348,
-      "visit_occurrence": 1372,
+      "visit_occurrence": 1369,
       "condition_occurrence": 219,
       "drug_exposure": 338,
-      "measurement": 1768,
-      "note": 23909
+      "measurement": 1712,
+      "note": 23910
     },
     "analytic_person": 11436
   },
@@ -171,7 +171,7 @@
       {
         "table": "measurement",
         "check": "null_measurement_date",
-        "violations": 366
+        "violations": 365
       },
       {
         "table": "measurement",
@@ -181,17 +181,17 @@
       {
         "table": "measurement",
         "check": "neg_value_as_number",
-        "violations": 367
+        "violations": 366
       },
       {
         "table": "measurement",
         "check": "orphan_person_id",
-        "violations": 364
+        "violations": 362
       },
       {
         "table": "measurement",
         "check": "dup_pk",
-        "violations": 361
+        "violations": 360
       },
       {
         "table": "note",
@@ -201,7 +201,7 @@
       {
         "table": "note",
         "check": "null_note_date",
-        "violations": 23213
+        "violations": 23214
       },
       {
         "table": "note",
@@ -216,7 +216,7 @@
       {
         "table": "note",
         "check": "dup_pk",
-        "violations": 23560
+        "violations": 23561
       }
     ],
     "cleaned": [
@@ -413,10 +413,10 @@
     ]
   },
   "timings_seconds": {
-    "validation_raw": 16.32,
-    "cleaning": 6.11,
-    "validation_cleaned": 11.69,
-    "build_and_write": 6.63,
-    "total": 43.61
+    "validation_raw": 9.91,
+    "cleaning": 3.59,
+    "validation_cleaned": 9.04,
+    "build_and_write": 5.48,
+    "total": 29.3
   }
 }
