@@ -48,6 +48,7 @@ def main():
         "java", "-jar", str(JAR_PATH),
         "-p", str(args.population),
         "-s", str(args.seed),
+        "-cs", str(args.seed),
         "-r", args.reference_date,
         "--exporter.csv.export=true",
         "--exporter.fhir.export=false",
