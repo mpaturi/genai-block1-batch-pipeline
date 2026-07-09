@@ -31,25 +31,6 @@ class ValidationResult:
     count: int
 
 
-def _count_expr(check_name: str, condition):
-    return F.sum(F.when(condition, 1).otherwise(0)).alias(check_name)
-
-
-def _null_expr(col: str):
-    return _count_expr(f"null_{col}", F.col(col).isNull())
-
-
-def _neg_expr(col: str):
-    return _count_expr(f"neg_{col}", F.col(col) < 0)
-
-
-def _bad_date_expr(start_col: str, end_col: str):
-    return _count_expr(
-        f"bad_date_{end_col}",
-        F.col(end_col).isNotNull() & (F.col(end_col) < F.col(start_col)),
-    )
-
-
 def _dup_count(df: DataFrame, pk: str) -> int:
     dup_counts = df.groupBy(pk).count().filter(F.col("count") > 1)
     total = dup_counts.select(F.sum(F.col("count") - 1)).collect()[0][0]
@@ -66,105 +47,123 @@ def _orphan_count(df: DataFrame, fk_col: str, parent: DataFrame, parent_pk: str)
     return bad.count()
 
 
-def _batch_validate(df: DataFrame, table: str, pk: str, exprs: list,
-                    extra_results: list[ValidationResult] | None = None) -> list[ValidationResult]:
-    row = df.agg(*exprs).collect()[0]
-    results = [ValidationResult(table, name, int(row[name])) for name in row.asDict()]
-    if extra_results:
-        results.extend(extra_results)
-    return results
-
-
 # ---------------------------------------------------------------------------
 # Per-table validation functions
 # ---------------------------------------------------------------------------
 
 def validate_person(df: DataFrame) -> list[ValidationResult]:
-    exprs = [
-        _null_expr("gender_concept_id"),
-        _null_expr("year_of_birth"),
-        _null_expr("race_concept_id"),
-        _null_expr("ethnicity_concept_id"),
-    ]
-    return _batch_validate(df, "person", "person_id", exprs, [
+    row = df.agg(
+        F.sum(F.when(F.col("gender_concept_id").isNull(), 1).otherwise(0)).alias("null_gender_concept_id"),
+        F.sum(F.when(F.col("year_of_birth").isNull(), 1).otherwise(0)).alias("null_year_of_birth"),
+        F.sum(F.when(F.col("race_concept_id").isNull(), 1).otherwise(0)).alias("null_race_concept_id"),
+        F.sum(F.when(F.col("ethnicity_concept_id").isNull(), 1).otherwise(0)).alias("null_ethnicity_concept_id"),
+    ).collect()[0]
+    return [
+        ValidationResult("person", "null_gender_concept_id", int(row["null_gender_concept_id"])),
+        ValidationResult("person", "null_year_of_birth", int(row["null_year_of_birth"])),
+        ValidationResult("person", "null_race_concept_id", int(row["null_race_concept_id"])),
+        ValidationResult("person", "null_ethnicity_concept_id", int(row["null_ethnicity_concept_id"])),
         ValidationResult("person", "dup_pk", _dup_count(df, "person_id")),
-    ])
+    ]
 
 
 def validate_visit_occurrence(df: DataFrame, person: DataFrame) -> list[ValidationResult]:
-    exprs = [
-        _null_expr("person_id"),
-        _null_expr("visit_concept_id"),
-        _null_expr("visit_start_date"),
-        _null_expr("visit_end_date"),
-        _bad_date_expr("visit_start_date", "visit_end_date"),
+    row = df.agg(
+        F.sum(F.when(F.col("person_id").isNull(), 1).otherwise(0)).alias("null_person_id"),
+        F.sum(F.when(F.col("visit_concept_id").isNull(), 1).otherwise(0)).alias("null_visit_concept_id"),
+        F.sum(F.when(F.col("visit_start_date").isNull(), 1).otherwise(0)).alias("null_visit_start_date"),
+        F.sum(F.when(F.col("visit_end_date").isNull(), 1).otherwise(0)).alias("null_visit_end_date"),
+        F.sum(F.when(
+            F.col("visit_end_date").isNotNull() & (F.col("visit_end_date") < F.col("visit_start_date")), 1
+        ).otherwise(0)).alias("bad_date_visit_end_date"),
+    ).collect()[0]
+    return [
+        ValidationResult("visit_occurrence", "null_person_id", int(row["null_person_id"])),
+        ValidationResult("visit_occurrence", "null_visit_concept_id", int(row["null_visit_concept_id"])),
+        ValidationResult("visit_occurrence", "null_visit_start_date", int(row["null_visit_start_date"])),
+        ValidationResult("visit_occurrence", "null_visit_end_date", int(row["null_visit_end_date"])),
+        ValidationResult("visit_occurrence", "bad_date_visit_end_date", int(row["bad_date_visit_end_date"])),
+        ValidationResult("visit_occurrence", "orphan_person_id", _orphan_count(df, "person_id", person, "person_id")),
+        ValidationResult("visit_occurrence", "dup_pk", _dup_count(df, "visit_occurrence_id")),
     ]
-    return _batch_validate(df, "visit_occurrence", "visit_occurrence_id", exprs, [
-        ValidationResult("visit_occurrence", "orphan_person_id",
-                         _orphan_count(df, "person_id", person, "person_id")),
-        ValidationResult("visit_occurrence", "dup_pk",
-                         _dup_count(df, "visit_occurrence_id")),
-    ])
 
 
 def validate_condition_occurrence(df: DataFrame) -> list[ValidationResult]:
-    exprs = [
-        _null_expr("person_id"),
-        _null_expr("condition_concept_id"),
-        _null_expr("condition_start_date"),
-        _bad_date_expr("condition_start_date", "condition_end_date"),
+    row = df.agg(
+        F.sum(F.when(F.col("person_id").isNull(), 1).otherwise(0)).alias("null_person_id"),
+        F.sum(F.when(F.col("condition_concept_id").isNull(), 1).otherwise(0)).alias("null_condition_concept_id"),
+        F.sum(F.when(F.col("condition_start_date").isNull(), 1).otherwise(0)).alias("null_condition_start_date"),
+        F.sum(F.when(
+            F.col("condition_end_date").isNotNull() & (F.col("condition_end_date") < F.col("condition_start_date")), 1
+        ).otherwise(0)).alias("bad_date_condition_end_date"),
+    ).collect()[0]
+    return [
+        ValidationResult("condition_occurrence", "null_person_id", int(row["null_person_id"])),
+        ValidationResult("condition_occurrence", "null_condition_concept_id", int(row["null_condition_concept_id"])),
+        ValidationResult("condition_occurrence", "null_condition_start_date", int(row["null_condition_start_date"])),
+        ValidationResult("condition_occurrence", "bad_date_condition_end_date", int(row["bad_date_condition_end_date"])),
+        ValidationResult("condition_occurrence", "dup_pk", _dup_count(df, "condition_occurrence_id")),
     ]
-    return _batch_validate(df, "condition_occurrence", "condition_occurrence_id", exprs, [
-        ValidationResult("condition_occurrence", "dup_pk",
-                         _dup_count(df, "condition_occurrence_id")),
-    ])
 
 
 def validate_drug_exposure(df: DataFrame) -> list[ValidationResult]:
-    exprs = [
-        _null_expr("person_id"),
-        _null_expr("drug_concept_id"),
-        _null_expr("drug_exposure_start_date"),
-        _null_expr("days_supply"),
-        _null_expr("quantity"),
-        _bad_date_expr("drug_exposure_start_date", "drug_exposure_end_date"),
-        _neg_expr("days_supply"),
-        _neg_expr("quantity"),
+    row = df.agg(
+        F.sum(F.when(F.col("person_id").isNull(), 1).otherwise(0)).alias("null_person_id"),
+        F.sum(F.when(F.col("drug_concept_id").isNull(), 1).otherwise(0)).alias("null_drug_concept_id"),
+        F.sum(F.when(F.col("drug_exposure_start_date").isNull(), 1).otherwise(0)).alias("null_drug_exposure_start_date"),
+        F.sum(F.when(F.col("days_supply").isNull(), 1).otherwise(0)).alias("null_days_supply"),
+        F.sum(F.when(F.col("quantity").isNull(), 1).otherwise(0)).alias("null_quantity"),
+        F.sum(F.when(
+            F.col("drug_exposure_end_date").isNotNull() & (F.col("drug_exposure_end_date") < F.col("drug_exposure_start_date")), 1
+        ).otherwise(0)).alias("bad_date_drug_exposure_end_date"),
+        F.sum(F.when(F.col("days_supply") < 0, 1).otherwise(0)).alias("neg_days_supply"),
+        F.sum(F.when(F.col("quantity") < 0, 1).otherwise(0)).alias("neg_quantity"),
+    ).collect()[0]
+    return [
+        ValidationResult("drug_exposure", "null_person_id", int(row["null_person_id"])),
+        ValidationResult("drug_exposure", "null_drug_concept_id", int(row["null_drug_concept_id"])),
+        ValidationResult("drug_exposure", "null_drug_exposure_start_date", int(row["null_drug_exposure_start_date"])),
+        ValidationResult("drug_exposure", "null_days_supply", int(row["null_days_supply"])),
+        ValidationResult("drug_exposure", "null_quantity", int(row["null_quantity"])),
+        ValidationResult("drug_exposure", "bad_date_drug_exposure_end_date", int(row["bad_date_drug_exposure_end_date"])),
+        ValidationResult("drug_exposure", "neg_days_supply", int(row["neg_days_supply"])),
+        ValidationResult("drug_exposure", "neg_quantity", int(row["neg_quantity"])),
+        ValidationResult("drug_exposure", "dup_pk", _dup_count(df, "drug_exposure_id")),
     ]
-    return _batch_validate(df, "drug_exposure", "drug_exposure_id", exprs, [
-        ValidationResult("drug_exposure", "dup_pk",
-                         _dup_count(df, "drug_exposure_id")),
-    ])
 
 
 def validate_measurement(df: DataFrame, person: DataFrame) -> list[ValidationResult]:
-    exprs = [
-        _null_expr("person_id"),
-        _null_expr("measurement_concept_id"),
-        _null_expr("measurement_date"),
-        _null_expr("value_as_number"),
-        _neg_expr("value_as_number"),
+    row = df.agg(
+        F.sum(F.when(F.col("person_id").isNull(), 1).otherwise(0)).alias("null_person_id"),
+        F.sum(F.when(F.col("measurement_concept_id").isNull(), 1).otherwise(0)).alias("null_measurement_concept_id"),
+        F.sum(F.when(F.col("measurement_date").isNull(), 1).otherwise(0)).alias("null_measurement_date"),
+        F.sum(F.when(F.col("value_as_number").isNull(), 1).otherwise(0)).alias("null_value_as_number"),
+        F.sum(F.when(F.col("value_as_number") < 0, 1).otherwise(0)).alias("neg_value_as_number"),
+    ).collect()[0]
+    return [
+        ValidationResult("measurement", "null_person_id", int(row["null_person_id"])),
+        ValidationResult("measurement", "null_measurement_concept_id", int(row["null_measurement_concept_id"])),
+        ValidationResult("measurement", "null_measurement_date", int(row["null_measurement_date"])),
+        ValidationResult("measurement", "null_value_as_number", int(row["null_value_as_number"])),
+        ValidationResult("measurement", "neg_value_as_number", int(row["neg_value_as_number"])),
+        ValidationResult("measurement", "orphan_person_id", _orphan_count(df, "person_id", person, "person_id")),
+        ValidationResult("measurement", "dup_pk", _dup_count(df, "measurement_id")),
     ]
-    return _batch_validate(df, "measurement", "measurement_id", exprs, [
-        ValidationResult("measurement", "orphan_person_id",
-                         _orphan_count(df, "person_id", person, "person_id")),
-        ValidationResult("measurement", "dup_pk",
-                         _dup_count(df, "measurement_id")),
-    ])
 
 
 def validate_note(df: DataFrame, visit: DataFrame) -> list[ValidationResult]:
-    exprs = [
-        _null_expr("person_id"),
-        _null_expr("note_date"),
-        _null_expr("note_text"),
+    row = df.agg(
+        F.sum(F.when(F.col("person_id").isNull(), 1).otherwise(0)).alias("null_person_id"),
+        F.sum(F.when(F.col("note_date").isNull(), 1).otherwise(0)).alias("null_note_date"),
+        F.sum(F.when(F.col("note_text").isNull(), 1).otherwise(0)).alias("null_note_text"),
+    ).collect()[0]
+    return [
+        ValidationResult("note", "null_person_id", int(row["null_person_id"])),
+        ValidationResult("note", "null_note_date", int(row["null_note_date"])),
+        ValidationResult("note", "null_note_text", int(row["null_note_text"])),
+        ValidationResult("note", "orphan_visit_occurrence_id", _orphan_count(df, "visit_occurrence_id", visit, "visit_occurrence_id")),
+        ValidationResult("note", "dup_pk", _dup_count(df, "note_id")),
     ]
-    return _batch_validate(df, "note", "note_id", exprs, [
-        ValidationResult("note", "orphan_visit_occurrence_id",
-                         _orphan_count(df, "visit_occurrence_id", visit, "visit_occurrence_id")),
-        ValidationResult("note", "dup_pk",
-                         _dup_count(df, "note_id")),
-    ])
 
 
 # ---------------------------------------------------------------------------
