@@ -289,6 +289,10 @@ def _inject_dirty_data(
     note: pd.DataFrame,
 ) -> tuple[pd.DataFrame, ...]:
     """Inject ~DIRTY_DATA_FRACTION of rows/values with known data quality issues."""
+    # One rng instance is reused sequentially across all null/bad-date/negative/
+    # duplicate injections below. Counts stay deterministic regardless of call
+    # order, but reordering these calls would change *which* specific rows get
+    # dirtied for a given seed — keep the order stable if reproducing a past run.
     rng = random.Random(RANDOM_SEED + 1)
 
     def _n(df: pd.DataFrame) -> int:

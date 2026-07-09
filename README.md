@@ -105,6 +105,19 @@ pytest
 jupyter notebook notebooks/demo.ipynb
 ```
 
+### Environment variable overrides
+
+These are optional — defaults work out of the box for this project's local dev setup. Override them if you're running on a different machine or want a different population/seed without editing `src/config.py`.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `BLOCK1_JAVA21_HOME` | Local Java 21 install path | Point Spark at a Java 21 JDK (required — PySpark is incompatible with Java 25+) |
+| `BLOCK1_HADOOP_HOME` | `~/hadoop` | Hadoop native libs location (Windows only) |
+| `BLOCK1_RANDOM_SEED` | `42` | Override the generator's random seed |
+| `BLOCK1_REFERENCE_DATE` | `2025-01-01` | Override the "as of" date used for age calculation |
+
+`scripts/run_all.py --seed`/`--reference-date` set the latter two automatically to match what Synthea was run with.
+
 ## Expected row counts
 
 Data is generated with a fixed seed (`RANDOM_SEED=42`), so row counts are deterministic. After running the pipeline, your `data/processed/pipeline_metrics.json` should match these counts exactly.
