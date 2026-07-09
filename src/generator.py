@@ -128,7 +128,11 @@ def _map_condition_occurrence(person_id_map: dict[str, int], visit_id_map: dict[
 
     # Whitelist filter — drop any SNOMED code not in our 3-condition dict
     df["condition_concept_id"] = df["CODE"].map(CONDITION_CONCEPT_ID)
+    before = len(df)
     df = df.dropna(subset=["condition_concept_id"])
+    dropped = before - len(df)
+    if dropped:
+        log.info("[CONDITION_OCCURRENCE] dropped %d rows with unmapped condition code", dropped)
 
     df["person_id"] = df["PATIENT"].map(person_id_map)
     df["visit_occurrence_id"] = df["ENCOUNTER"].map(visit_id_map).astype("Int64")
@@ -159,7 +163,11 @@ def _map_drug_exposure(person_id_map: dict[str, int], included_encounter_uuids: 
 
     # Whitelist filter — drop any RxNorm code not in our 6-drug dict
     df["drug_concept_id"] = df["CODE"].map(DRUG_CONCEPT_ID)
+    before = len(df)
     df = df.dropna(subset=["drug_concept_id"])
+    dropped = before - len(df)
+    if dropped:
+        log.info("[DRUG_EXPOSURE] dropped %d rows with unmapped drug code", dropped)
 
     df["person_id"] = df["PATIENT"].map(person_id_map)
     df["drug_exposure_start_date"] = pd.to_datetime(df["START"], errors="coerce").dt.date
@@ -200,7 +208,11 @@ def _map_measurement(
 
     # Whitelist filter — keep only our 5 LOINC codes
     df["measurement_concept_id"] = df["CODE"].map(MEASUREMENT_CONCEPT_ID)
+    before = len(df)
     df = df.dropna(subset=["measurement_concept_id"])
+    dropped = before - len(df)
+    if dropped:
+        log.info("[MEASUREMENT] dropped %d rows with unmapped measurement code", dropped)
 
     df["person_id"] = df["PATIENT"].map(person_id_map)
     df["visit_occurrence_id"] = df["ENCOUNTER"].map(visit_id_map).astype("Int64")
