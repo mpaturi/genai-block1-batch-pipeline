@@ -6,13 +6,9 @@ A Python/PySpark batch pipeline project built on a fully synthetic OMOP-style he
 
 This project demonstrates a production-ready healthcare data pipeline that takes raw synthetic patient data and transforms it into a clean, validated, analytics-ready dataset — the kind of foundation that healthcare organizations need before they can do anything useful with their data. It enforces data quality at every step: detecting nulls, duplicates, orphaned records, and out-of-range values, then cleaning them systematically with full before-and-after traceability. The output — a single patient-level table with visit counts, chronic condition flags, and latest lab values — is the building block for clinical analytics like population health management, risk stratification, and care gap identification. By using OMOP-style conventions, the pipeline speaks the same language as industry-standard research networks (OHDSI), making it portable across health systems. The deterministic, seed-based design means results are fully reproducible, which is critical for regulatory and audit requirements in healthcare. In short, it solves the unglamorous but essential problem that most health data projects fail on: getting messy clinical data into a trustworthy, queryable shape before any analytics or AI can begin.
 
-## Data flow
-
-![Data Flow](docs/data_flow.png)
-
 ## Architecture
 
-![Pipeline Architecture](docs/architecture.png)
+![Architecture](docs/architecture.svg)
 
 ## Output dataset
 
@@ -29,15 +25,11 @@ The pipeline produces a patient-level analytics table (`analytic_person`) with o
 
 Written as partitioned Parquet under `data/processed/`, partitioned by `year_of_birth_band`.
 
-### Joins and aggregations
+### Building analytic_person
 
-![Join Diagram](docs/join_diagram.png)
+![Building analytic_person](docs/analytic_person.svg)
 
-Each clinical table is aggregated by `person_id`, then left-joined onto PERSON to produce one row per person.
-
-### Aggregations
-
-![Aggregation Diagram](docs/aggregation_diagram.png)
+Each clinical table is aggregated by `person_id`, then left-joined sequentially onto PERSON to produce one row per person.
 
 ## Scope
 
