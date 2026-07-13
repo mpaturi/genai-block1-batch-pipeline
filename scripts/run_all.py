@@ -9,6 +9,7 @@ import argparse
 import os
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -34,6 +35,16 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--reference-date", default="20250101")
     args = parser.parse_args()
+
+    try:
+        datetime.strptime(args.reference_date, "%Y%m%d")
+    except ValueError:
+        print(
+            f"ERROR: --reference-date must be in YYYYMMDD format "
+            f"(e.g. 20250101), got: {args.reference_date}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     if not JAR_PATH.exists():
         print(f"ERROR: Synthea jar not found at '{JAR_PATH}'.")
