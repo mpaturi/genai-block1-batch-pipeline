@@ -57,12 +57,28 @@ VISIT_CONCEPT_ID = {
 CONDITION_DIABETES = 1
 CONDITION_HYPERTENSION = 2
 CONDITION_HYPERLIPIDEMIA = 3
+CONDITION_ANEMIA = 4
+CONDITION_OSTEOPOROSIS = 5
+CONDITION_CHF = 6
+CONDITION_AFIB = 7
+CONDITION_STREP_THROAT = 8
+CONDITION_UTI = 9
+CONDITION_PULMONARY_EMBOLISM = 10
+CONDITION_OSTEOARTHRITIS = 11
 
 # conditions.csv CODE (SNOMED)
 CONDITION_CONCEPT_ID = {
     "44054006": CONDITION_DIABETES,  # Diabetes mellitus type 2 (disorder)
     "59621000": CONDITION_HYPERTENSION,  # Essential hypertension (disorder)
     "55822004": CONDITION_HYPERLIPIDEMIA,  # Hyperlipidemia (disorder)
+    "271737000": CONDITION_ANEMIA,  # Anemia (disorder)
+    "64859006": CONDITION_OSTEOPOROSIS,  # Osteoporosis (disorder)
+    "88805009": CONDITION_CHF,  # Chronic congestive heart failure (disorder)
+    "49436004": CONDITION_AFIB,  # Atrial fibrillation (disorder)
+    "43878008": CONDITION_STREP_THROAT,  # Streptococcal sore throat (disorder)
+    "307426000": CONDITION_UTI,  # Acute infective cystitis (disorder)
+    "706870000": CONDITION_PULMONARY_EMBOLISM,  # Acute pulmonary embolism (disorder)
+    "239873007": CONDITION_OSTEOARTHRITIS,  # Osteoarthritis of knee (disorder)
 }
 
 # --- DRUG_EXPOSURE -----------------------------------------------------------
