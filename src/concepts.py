@@ -91,6 +91,18 @@ DRUG_CONCEPT_ID = {
     "308136": 4,  # Amlodipine (hypertension)
     "310798": 5,  # Hydrochlorothiazide (hypertension)
     "314231": 6,  # Simvastatin (hyperlipidemia)
+    "205923": 7,   # Epoetin Alfa (anemia)
+    "904419": 8,   # Alendronic acid (osteoporosis)
+    "1719286": 9,  # Furosemide injection (CHF)
+    "200033": 10,  # Carvedilol (CHF)
+    "197604": 11,  # Digoxin (atrial fibrillation)
+    "855332": 12,  # Warfarin (atrial fibrillation)
+    "834102": 13,  # Penicillin V Potassium 500mg (strep throat)
+    "834061": 13,  # Penicillin V Potassium 250mg (strep throat, same concept as above)
+    "309309": 14,  # Ciprofloxacin (UTI)
+    "1648755": 15, # Nitrofurantoin (UTI)
+    "854252": 16,  # Enoxaparin (pulmonary embolism)
+    "849574": 17,  # Naproxen sodium (osteoarthritis)
 }
 
 # --- MEASUREMENT --------------------------------------------------------------
