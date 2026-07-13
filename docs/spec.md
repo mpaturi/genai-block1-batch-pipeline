@@ -163,7 +163,7 @@ Generation rules will aim for internal consistency and basic realism, not medica
 
 Examples of synthetic concept families:
 - visit types: outpatient, inpatient, ER
-- chronic conditions: diabetes, hypertension, hyperlipidemia
+- chronic conditions: diabetes, hypertension, hyperlipidemia, anemia, osteoporosis, chronic congestive heart failure, atrial fibrillation, streptococcal sore throat, acute infective cystitis (UTI), acute pulmonary embolism, osteoarthritis of knee
 - measurements: systolic blood pressure, BMI, glucose, HbA1c
 
 ### Concept ID mapping
