@@ -88,7 +88,7 @@
   <rect x="580" y="40" width="18" height="18" class="box out"/>
   <text x="606" y="54" class="legend-text">Final output</text>
   <text x="20" y="90" class="legend-text" font-weight="600">Tech stack:</text>
-  <text x="20" y="112" class="legend-text">Java 21 (Synthea)  ·  Python 3.11+  ·  pandas  ·  PySpark  ·  Parquet  ·  pytest (104 tests)</text>
+  <text x="20" y="112" class="legend-text">Java 21 (Synthea)  ·  Python 3.11+  ·  pandas  ·  PySpark  ·  Parquet  ·  pytest (105 tests)</text>
   <text x="20" y="134" class="legend-text" fill="#6B7280">Deterministic: RANDOM_SEED=42, REFERENCE_DATE=2025-01-01</text>
 </g>
 </svg>

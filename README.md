@@ -37,7 +37,7 @@ Block 1 includes:
 - project documentation (`spec.md`, `plan.md`, `tasks.md`)
 - synthetic OMOP-style data design and generation via Synthea
 - a PySpark batch pipeline with validation, cleaning, and transformation
-- 104 tests with `pytest`
+- 105 tests with `pytest`
 - a demo notebook
 
 Block 1 does not include:
@@ -56,12 +56,16 @@ Block 1 does not include:
 - Jupyter Notebook / JupyterLab
 - Java 21 LTS (Synthea only)
 
+## Results
+
+Pipeline processes roughly 10,000 synthetic patients across 6 tables end-to-end via one command. 105/105 tests passing. The data-quality gate catches and reports null, duplicate, orphan, and out-of-range violations before any row reaches `data/processed/`. Whitelist coverage was expanded from 3 conditions/6 drugs to 11 conditions/17 drugs, using codes verified against real Synthea `REASONCODE` linkages rather than assumed mappings — broadening the dataset for downstream RAG use in later blocks. Synthea's population, condition, visit, and note generation are fully deterministic given a fixed seed; `measurement` and `drug_exposure` carry a small (~0.1-0.2%) run-to-run variance traced to Synthea's own internal randomness, documented as a known limitation below.
+
 ## Project structure
 
 ```text
 docs/           project specification, plan, and tasks
 src/            pipeline modules and helper code
-tests/          pytest-based tests (104 tests)
+tests/          pytest-based tests (105 tests)
 notebooks/      demo notebook (demo.ipynb)
 scripts/        utility scripts (run_all.py)
 data/synthea_raw/  raw Synthea CSV export (git-ignored)
@@ -124,17 +128,17 @@ Data is generated with a fixed seed (`RANDOM_SEED=42`), so row counts are determ
 
 | Table | Raw | Cleaned | Dropped |
 |---|---:|---:|---:|
-| person | 11,770 | 11,424 | 346 |
-| visit_occurrence | 23,541 | 22,175 | 1,366 |
-| condition_occurrence | 5,037 | 4,817 | 220 |
-| drug_exposure | 4,564 | 4,223 | 341 |
-| measurement | 24,431 | 22,639 | 1,792 |
-| note | 46,729 | 22,847 | 23,882 |
-| **analytic_person** | — | **11,424** | — |
+| person | 11,784 | 11,436 | 348 |
+| visit_occurrence | 23,568 | 22,188 | 1,380 |
+| condition_occurrence | 14,264 | 13,639 | 625 |
+| drug_exposure | 6,322 | 5,860 | 462 |
+| measurement | 24,616 | 22,881 | 1,735 |
+| note | 23,568 | 21,535 | 2,033 |
+| **analytic_person** | — | **11,436** | — |
 
 Note: `measurement` and `drug_exposure` row counts can vary slightly (~0.1-0.2%) across separate Synthea regenerations, even with both `-s` and `-cs` pinned — Synthea's medication and lab/vitals modules appear to have a source of randomness not controlled by either seed flag. `person`, `visit_occurrence`, `condition_occurrence`, and `note` are fully reproducible across repeated runs (verified across 3 full-population regenerations). This doesn't affect `generator.py`/`pipeline.py`'s own reproducibility given a fixed Synthea export.
 
-Raw validation detects 21 check failures across the 6 tables. After cleaning, all checks pass with 0 violations. The full reference file is at [`data/sample/expected_metrics.json`](data/sample/expected_metrics.json).
+Raw validation detects 20 check failures across the 6 tables. After cleaning, all checks pass with 0 violations. The full reference file is at [`data/sample/expected_metrics.json`](data/sample/expected_metrics.json).
 
 ### Drop reasons
 
@@ -142,16 +146,16 @@ Rows can fail multiple checks, so individual violation counts may exceed the tot
 
 | Table | Dropped | Reasons (violations detected) |
 |---|---:|---|
-| person | 346 | null `year_of_birth` (176), duplicate PK (173) |
-| visit_occurrence | 1,366 | null `visit_concept_id` (352), bad end date (350), duplicate PK (347) |
-| condition_occurrence | 220 | null `condition_concept_id` (75), bad end date (77), duplicate PK (74) |
-| drug_exposure | 341 | null `drug_concept_id` (68), bad end date (78), negative `days_supply` (69), negative `quantity` (68), duplicate PK (67) |
-| measurement | 1,792 | null `measurement_date` (366), negative `value_as_number` (367), orphan `person_id` (363), duplicate PK (361) |
-| note | 23,882 | null `note_date` (23,188), null `note_text` (23,541), orphan `visit_occurrence_id` (6), duplicate PK (23,534) |
+| person | 348 | null `year_of_birth` (177), duplicate PK (174) |
+| visit_occurrence | 1,380 | null `visit_concept_id` (353), bad end date (350), duplicate PK (348) |
+| condition_occurrence | 625 | null `condition_concept_id` (213), bad end date (212), duplicate PK (210) |
+| drug_exposure | 462 | null `drug_concept_id` (94), bad end date (102), negative `days_supply` (93), negative `quantity` (94), duplicate PK (93) |
+| measurement | 1,735 | null `measurement_date` (370), negative `value_as_number` (371), orphan `person_id` (368), duplicate PK (363) |
+| note | 2,033 | null `note_text` (351), orphan `visit_occurrence_id` (354), duplicate PK (348) |
 
 ## Tests
 
-104 tests across 4 test files, all run with `pytest` against in-memory Spark DataFrames.
+105 tests across 5 test files, all run with `pytest` against in-memory Spark DataFrames.
 
 | File | Tests | What it covers |
 |---|---:|---|
@@ -159,6 +163,7 @@ Rows can fail multiple checks, so individual violation counts may exceed the tot
 | `test_transforms.py` | 45 | Cleaning functions for all 6 tables — verifies each drop rule (nulls, bad dates, negatives, orphans, duplicates) and edge cases (e.g., zero `days_supply` is kept, null optional FKs are kept). Also tests `clean_all` before/after metrics and `build_analytic_person` — age calculation, decade band, visit count aggregation, condition flags, latest measurement values, and null handling for persons with no data. |
 | `test_pipeline.py` | 7 | Pipeline orchestration — `PipelineValidationError` type, hard gate pass/fail behavior, error message content, and validation logging (warnings on violations, silence on clean data, stage name in log output). |
 | `test_concepts.py` | 2 | Consistency between the concept whitelist dicts and their name-lookup dicts — every `CONDITION_CONCEPT_ID`/`DRUG_CONCEPT_ID` value has a matching entry in `CONDITION_NAMES`/`DRUG_NAMES`. |
+| `test_io_utils.py` | 1 | Regression test for the CSV multiline bug — a note with an embedded `\n\n` reads back as one correct row, not corrupted phantom rows. |
 
 ### Test categories
 
@@ -173,11 +178,15 @@ Rows can fail multiple checks, so individual violation counts may exceed the tot
 | Pipeline | 7 | Hard gate pass/fail, error message content, logging behavior |
 | Integration | 3 | `validate_all` combines results, `clean_all` returns correct metrics |
 
-All tests use in-memory Spark DataFrames with minimal fixture data — no files on disk are needed.
+Most tests use in-memory Spark DataFrames with minimal fixture data; test_io_utils.py is the one exception, writing a real temp CSV to test the file-reading path directly.
 
 ## Data note
 
 This project uses synthetic OMOP-style healthcare data only. Bulk generated data is stored locally and is not committed to version control.
+
+## AI-assisted workflow
+
+Built with Claude Code as the implementation agent, directed through explicit, reviewed instructions rather than open-ended prompts. Every change went through an independent review pass before committing, which caught real issues — a `NaN`-vs-`None` bug that worked by accident, a stale comment from an earlier change, and an age-calculation edit that quietly traded accuracy for code uniformity. Design decisions were made deliberately, not by default: rejecting cancer conditions from the whitelist since their only linked drugs aren't exclusive to one cancer type, and choosing deterministic phrase-bank notes over LLM-generated ones after pricing out both the Claude API and local Ollama as not worth it at this stage. See Implementation phases below for a phase-by-phase breakdown of what Claude built versus what was corrected or overridden.
 
 ## Implementation phases
 
@@ -201,4 +210,4 @@ Block 1 was built across 13 phases (0–12), each delivered as a separate branch
 
 ## Status
 
-Block 1 is complete. All phases have been merged, 104 tests pass, and the demo notebook runs end-to-end. Later blocks may expand the schema, increase scale, and introduce more advanced engineering concerns.
+Block 1 is complete. All phases have been merged, 105 tests pass, and the demo notebook runs end-to-end. Later blocks may expand the schema, increase scale, and introduce more advanced engineering concerns.
