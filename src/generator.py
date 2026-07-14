@@ -27,10 +27,16 @@ from src.config import (
 )
 from src.concepts import (
     CONDITION_CONCEPT_ID,
+    CONDITION_NAMES,
     DRUG_CONCEPT_ID,
+    DRUG_NAMES,
     ETHNICITY_CONCEPT_ID,
     GENDER_CONCEPT_ID,
+    MEASUREMENT_BMI,
     MEASUREMENT_CONCEPT_ID,
+    MEASUREMENT_GLUCOSE,
+    MEASUREMENT_HBA1C,
+    MEASUREMENT_SBP,
     RACE_CONCEPT_ID,
     UNIT_CONCEPT_ID,
     VISIT_CONCEPT_ID,
@@ -121,7 +127,7 @@ def _map_visit_occurrence(person_id_map: dict[str, int]) -> tuple[pd.DataFrame, 
 def _map_condition_occurrence(person_id_map: dict[str, int], visit_id_map: dict[str, int]) -> pd.DataFrame:
     df = _csv("conditions")
 
-    # Whitelist filter — drop any SNOMED code not in our 3-condition dict
+    # Whitelist filter — drop any SNOMED code not in our 11-condition dict
     df["condition_concept_id"] = df["CODE"].map(CONDITION_CONCEPT_ID)
     before = len(df)
     df = df.dropna(subset=["condition_concept_id"])
@@ -156,7 +162,7 @@ def _map_drug_exposure(person_id_map: dict[str, int], included_encounter_uuids: 
     # Keep only medications from visits included in the visit cap
     df = df[df["ENCOUNTER"].isin(included_encounter_uuids)]
 
-    # Whitelist filter — drop any RxNorm code not in our 6-drug dict
+    # Whitelist filter — drop any RxNorm code not in our 17-drug dict
     df["drug_concept_id"] = df["CODE"].map(DRUG_CONCEPT_ID)
     before = len(df)
     df = df.dropna(subset=["drug_concept_id"])
@@ -257,18 +263,154 @@ _NOTE_ASSESSMENT = {
     3: "Patient assessed in the emergency department. Appropriate workup completed. Disposition determined.",
 }
 
+_LAB_NAMES = {
+    MEASUREMENT_SBP: "systolic blood pressure",
+    MEASUREMENT_BMI: "BMI",
+    MEASUREMENT_GLUCOSE: "glucose",
+    MEASUREMENT_HBA1C: "HbA1c",
+}
 
-def _map_note(visit: pd.DataFrame) -> pd.DataFrame:
-    rng = random.Random(RANDOM_SEED)
+_CONDITION_PHRASES = [
+    "Patient presents for follow-up of {condition}.",
+    "Continues management of {condition}.",
+    "Here for routine monitoring of {condition}.",
+    "Ongoing care for {condition} reviewed today.",
+]
 
-    def _make_text(visit_concept_id: int) -> str:
+_DRUG_PHRASES = [
+    "Currently taking {drug}, tolerating well.",
+    "Medication regimen includes {drug}.",
+    "Continues {drug} as prescribed.",
+    "No changes made to {drug} at this visit.",
+]
+
+_LAB_PHRASES = [
+    "Most recent {lab} was {value}.",
+    "Latest {lab} reading: {value}.",
+    "{lab} at last check: {value}.",
+]
+
+_DEMOGRAPHIC_PHRASES = [
+    "{age}-year-old {gender} presenting today.",
+    "Patient is a {age}-year-old {gender}.",
+    "{gender}, age {age}, seen in clinic.",
+]
+
+_GENDER_WORD = {1: "male", 2: "female"}
+
+
+def _make_text(row, rng: random.Random) -> str:
+    conditions = row["conditions"]   # list of condition_concept_ids for this patient
+    drugs = row["drugs"]             # list of drug_concept_ids for this patient
+
+    if not conditions:
+        # Whitelist doesn't cover this patient — fall back to the original generic template
+        visit_concept_id = row["visit_concept_id"]
         complaint = rng.choice(_NOTE_COMPLAINTS.get(visit_concept_id, _NOTE_COMPLAINTS[1]))
         assessment = _NOTE_ASSESSMENT.get(visit_concept_id, _NOTE_ASSESSMENT[1])
         return f"CHIEF COMPLAINT: {complaint}\n\nASSESSMENT AND PLAN: {assessment}"
 
-    df = visit[["visit_occurrence_id", "person_id", "visit_start_date", "visit_concept_id"]].copy()
+    age = row["age"]
+    gender = _GENDER_WORD.get(row["gender_concept_id"], "patient")
+    condition_name = CONDITION_NAMES[rng.choice(conditions)]
+
+    parts = [
+        rng.choice(_DEMOGRAPHIC_PHRASES).format(age=age, gender=gender),
+        rng.choice(_CONDITION_PHRASES).format(condition=condition_name),
+    ]
+
+    if drugs:
+        drug_name = DRUG_NAMES[rng.choice(drugs)]
+        parts.append(rng.choice(_DRUG_PHRASES).format(drug=drug_name))
+
+    if pd.notna(row["latest_lab_concept_id"]):
+        lab_name = _LAB_NAMES.get(row["latest_lab_concept_id"])
+        if lab_name:
+            parts.append(rng.choice(_LAB_PHRASES).format(lab=lab_name, value=row["latest_lab_value"]))
+
+    return "CHIEF COMPLAINT: " + " ".join(parts)
+
+
+def _gender_by_person(person: pd.DataFrame) -> pd.DataFrame:
+    """One row per person: year_of_birth and gender_concept_id, used to compute
+    each note's age as of that specific visit's date."""
+    return person[["person_id", "year_of_birth", "gender_concept_id"]]
+
+
+def _conditions_by_person(condition: pd.DataFrame) -> pd.DataFrame:
+    """One row per person: every condition_concept_id they've ever had, as a list."""
+    return (
+        condition.groupby("person_id")["condition_concept_id"]
+        .apply(list)
+        .reset_index(name="conditions")
+    )
+
+
+def _drugs_by_person(drug: pd.DataFrame) -> pd.DataFrame:
+    """One row per person: every drug_concept_id they've ever been prescribed, as a list."""
+    return (
+        drug.groupby("person_id")["drug_concept_id"]
+        .apply(list)
+        .reset_index(name="drugs")
+    )
+
+
+def _latest_lab_by_person(measurement: pd.DataFrame) -> pd.DataFrame:
+    """One row per person: their single most recent lab measurement."""
+    return (
+        measurement.sort_values("measurement_date")
+        .groupby("person_id")
+        .tail(1)[["person_id", "measurement_concept_id", "value_as_number"]]
+        .rename(columns={
+            "measurement_concept_id": "latest_lab_concept_id",
+            "value_as_number": "latest_lab_value",
+        })
+    )
+
+
+def _map_note(
+    visit: pd.DataFrame,
+    person: pd.DataFrame,
+    condition: pd.DataFrame,
+    drug: pd.DataFrame,
+    measurement: pd.DataFrame,
+) -> pd.DataFrame:
+    """Map NOTE — one free-text note per kept visit.
+
+    For patients with at least one whitelisted condition, the note text is
+    assembled from phrase banks describing their age/gender, condition, drug,
+    and latest lab value (see _make_text). Patients with no whitelisted
+    condition fall back to the original generic template keyed on visit type.
+
+    Condition/drug/lab history is looked up across the patient's whole record,
+    not scoped to this one visit — drug_exposure has no visit link at all, and
+    a patient's full history makes for more useful note content than just
+    whatever happened at this specific encounter.
+    """
+    rng = random.Random(RANDOM_SEED)
+
+    df = visit[["visit_occurrence_id", "person_id", "visit_concept_id", "visit_start_date"]].copy()
     df = df.rename(columns={"visit_start_date": "note_date"})
-    df["note_text"] = df["visit_concept_id"].apply(_make_text)
+
+    for lookup in (
+        _gender_by_person(person),
+        _conditions_by_person(condition),
+        _drugs_by_person(drug),
+        _latest_lab_by_person(measurement),
+    ):
+        df = df.merge(lookup, on="person_id", how="left")
+
+    # Age at the time of this specific visit, not a single fixed age per
+    # person -- if a patient's two kept visits are years apart, each note
+    # reflects their actual age at that visit, not today's age.
+    df["age"] = pd.to_datetime(df["note_date"]).dt.year - df["year_of_birth"]
+
+    # Patients with no condition/drug history get an empty list rather than
+    # NaN -- absence of history is a valid, expected case, not missing data.
+    df["conditions"] = df["conditions"].apply(lambda x: x if isinstance(x, list) else [])
+    df["drugs"] = df["drugs"].apply(lambda x: x if isinstance(x, list) else [])
+
+    df["note_text"] = df.apply(lambda row: _make_text(row, rng), axis=1)
     df = df.reset_index(drop=True)
     df["note_id"] = df.index + 1
 
@@ -401,7 +543,7 @@ def generate() -> None:
     condition   = _map_condition_occurrence(person_id_map, visit_id_map)
     drug        = _map_drug_exposure(person_id_map, included_encounter_uuids)
     measurement = _map_measurement(person_id_map, visit_id_map, included_encounter_uuids)
-    note        = _map_note(visit)
+    note        = _map_note(visit, person, condition, drug, measurement)
 
     # Inject dirty rows/values
     person, visit, condition, drug, measurement, note = _inject_dirty_data(
