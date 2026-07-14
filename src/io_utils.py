@@ -59,6 +59,12 @@ def _read_csv(spark: SparkSession, filename: str, schema) -> DataFrame:
         spark.read
         .option("header", "true")
         .option("dateFormat", "yyyy-MM-dd")
+        # note_text can contain embedded "\n\n" (e.g. "CHIEF COMPLAINT: ...\n\nASSESSMENT
+        # AND PLAN: ..."). Spark's default single-line CSV mode treats a newline inside a
+        # quoted field as a new row boundary, silently corrupting NOTE rows into extra
+        # null-filled phantom rows. multiLine=true tells it to respect CSV quoting across
+        # physical lines instead.
+        .option("multiLine", "true")
         .schema(schema)
         .csv(str(csv_path))
     )
