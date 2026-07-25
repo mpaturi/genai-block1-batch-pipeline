@@ -132,6 +132,8 @@ Data is generated with a fixed seed (`RANDOM_SEED=42`), so row counts are determ
 | note | 46,729 | 22,847 | 23,882 |
 | **analytic_person** | — | **11,424** | — |
 
+Note: `measurement` and `drug_exposure` row counts can vary slightly (~0.1-0.2%) across separate Synthea regenerations, even with both `-s` and `-cs` pinned — Synthea's medication and lab/vitals modules appear to have a source of randomness not controlled by either seed flag. `person`, `visit_occurrence`, `condition_occurrence`, and `note` are fully reproducible across repeated runs (verified across 3 full-population regenerations). This doesn't affect `generator.py`/`pipeline.py`'s own reproducibility given a fixed Synthea export.
+
 Raw validation detects 21 check failures across the 6 tables. After cleaning, all checks pass with 0 violations. The full reference file is at [`data/sample/expected_metrics.json`](data/sample/expected_metrics.json).
 
 ### Drop reasons
