@@ -326,7 +326,7 @@ def _make_text(row, rng: random.Random) -> str:
     if pd.notna(row["latest_lab_concept_id"]):
         lab_name = _LAB_NAMES.get(row["latest_lab_concept_id"])
         if lab_name:
-            parts.append(rng.choice(_LAB_PHRASES).format(lab=lab_name, value=row["latest_lab_value"]))
+            parts.append(rng.choice(_LAB_PHRASES).format(lab=lab_name, value=f"{row['latest_lab_value']:g}"))
 
     return "CHIEF COMPLAINT: " + " ".join(parts)
 
@@ -387,6 +387,7 @@ def _map_note(
     a patient's full history makes for more useful note content than just
     whatever happened at this specific encounter.
     """
+    # Must stay local to _map_note, not merged with _inject_dirty_data's RNG — that's the only thing preventing a silent determinism break across all tables.
     rng = random.Random(RANDOM_SEED)
 
     df = visit[["visit_occurrence_id", "person_id", "visit_concept_id", "visit_start_date"]].copy()
