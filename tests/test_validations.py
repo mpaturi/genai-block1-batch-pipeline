@@ -92,46 +92,50 @@ def _result(results, check):
 # ---------------------------------------------------------------------------
 
 class TestValidatePerson:
-    def _person(self, spark, rows):
-        return spark.createDataFrame(rows, PERSON_SCHEMA)
+    """One combined dirty dataset covers 5 of the 6 checks in a single
+    validate_person() call; the clean-data and no-false-positive-dup cases
+    stay as separate, minimal fixtures since they test distinct datasets
+    that can't be merged without losing what they specifically prove."""
 
-    def _clean_row(self):
-        return (1, 8507, 1980, 8516, 38003564)
+    @pytest.fixture(scope="class")
+    def dirty_results(self, spark):
+        rows = [
+            (1, 8507, 1980, 8516, 38003564),   # baseline (not itself asserted on)
+            (2, None, 1980, 8516, 38003564),   # null gender_concept_id
+            (3, 8507, None, 8516, 38003564),   # null year_of_birth
+            (4, 8507, 1980, None, 38003564),   # null race_concept_id
+            (5, 8507, 1980, 8516, None),       # null ethnicity_concept_id
+            (6, 8507, 1980, 8516, 38003564),   # duplicate pair -> dup_pk
+            (6, 8507, 1980, 8516, 38003564),
+        ]
+        df = spark.createDataFrame(rows, PERSON_SCHEMA)
+        return validate_person(df)
+
+    def test_null_gender_concept_id(self, dirty_results):
+        assert _result(dirty_results, "null_gender_concept_id").count == 1
+
+    def test_null_year_of_birth(self, dirty_results):
+        assert _result(dirty_results, "null_year_of_birth").count == 1
+
+    def test_null_race_concept_id(self, dirty_results):
+        assert _result(dirty_results, "null_race_concept_id").count == 1
+
+    def test_null_ethnicity_concept_id(self, dirty_results):
+        assert _result(dirty_results, "null_ethnicity_concept_id").count == 1
+
+    def test_dup_pk(self, dirty_results):
+        assert _result(dirty_results, "dup_pk").count == 1
 
     def test_clean_data_no_violations(self, spark):
-        df = self._person(spark, [self._clean_row()])
-        results = validate_person(df)
-        assert all(r.count == 0 for r in results)
-
-    def test_null_gender_concept_id(self, spark):
-        df = self._person(spark, [(1, None, 1980, 8516, 38003564)])
-        r = _result(validate_person(df), "null_gender_concept_id")
-        assert r.count == 1
-
-    def test_null_year_of_birth(self, spark):
-        df = self._person(spark, [(1, 8507, None, 8516, 38003564)])
-        r = _result(validate_person(df), "null_year_of_birth")
-        assert r.count == 1
-
-    def test_null_race_concept_id(self, spark):
-        df = self._person(spark, [(1, 8507, 1980, None, 38003564)])
-        r = _result(validate_person(df), "null_race_concept_id")
-        assert r.count == 1
-
-    def test_null_ethnicity_concept_id(self, spark):
-        df = self._person(spark, [(1, 8507, 1980, 8516, None)])
-        r = _result(validate_person(df), "null_ethnicity_concept_id")
-        assert r.count == 1
-
-    def test_dup_pk(self, spark):
-        df = self._person(spark, [self._clean_row(), self._clean_row()])
-        r = _result(validate_person(df), "dup_pk")
-        assert r.count == 1  # one extra row
+        df = spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+        assert all(r.count == 0 for r in validate_person(df))
 
     def test_no_dup_when_unique(self, spark):
-        df = self._person(spark, [self._clean_row(), (2, 8507, 1985, 8516, 38003564)])
-        r = _result(validate_person(df), "dup_pk")
-        assert r.count == 0
+        df = spark.createDataFrame([
+            (1, 8507, 1980, 8516, 38003564),
+            (2, 8507, 1985, 8516, 38003564),
+        ], PERSON_SCHEMA)
+        assert _result(validate_person(df), "dup_pk").count == 0
 
 
 # ---------------------------------------------------------------------------
@@ -139,54 +143,52 @@ class TestValidatePerson:
 # ---------------------------------------------------------------------------
 
 class TestValidateVisitOccurrence:
-    def _visit(self, spark, rows):
-        return spark.createDataFrame(rows, VISIT_SCHEMA)
+    """One combined dirty dataset covers 6 of the 7 checks in a single
+    validate_visit_occurrence() call; clean-data stays separate since it's
+    a distinct all-valid dataset."""
 
-    def _person(self, spark):
-        return spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+    @pytest.fixture(scope="class")
+    def dirty_results(self, spark):
+        person = spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+        rows = [
+            (10, 1, 9202, D1, D2),      # baseline (not itself asserted on)
+            (11, None, 9202, D1, D2),   # null_person_id
+            (12, 1, None, D1, D2),      # null_visit_concept_id
+            (13, 1, 9202, None, D2),    # null_visit_start_date
+            (14, 1, 9202, D1, None),    # null_visit_end_date
+            (15, 1, 9202, D2, D1),      # bad_date_visit_end_date (end < start)
+            (16, 99, 9202, D1, D2),     # orphan_person_id (person 99 not in parent)
+            (17, 1, 9202, D1, D2),      # dup_pk pair
+            (17, 1, 9202, D1, D2),
+        ]
+        df = spark.createDataFrame(rows, VISIT_SCHEMA)
+        return validate_visit_occurrence(df, person)
 
-    def _clean_row(self):
-        return (10, 1, 9202, D1, D2)
+    def test_null_person_id(self, dirty_results):
+        assert _result(dirty_results, "null_person_id").count == 1
+
+    def test_null_visit_concept_id(self, dirty_results):
+        assert _result(dirty_results, "null_visit_concept_id").count == 1
+
+    def test_null_visit_start_date(self, dirty_results):
+        assert _result(dirty_results, "null_visit_start_date").count == 1
+
+    def test_null_visit_end_date(self, dirty_results):
+        assert _result(dirty_results, "null_visit_end_date").count == 1
+
+    def test_bad_date_end_before_start(self, dirty_results):
+        assert _result(dirty_results, "bad_date_visit_end_date").count == 1
+
+    def test_orphan_person_id(self, dirty_results):
+        assert _result(dirty_results, "orphan_person_id").count == 1
+
+    def test_dup_pk(self, dirty_results):
+        assert _result(dirty_results, "dup_pk").count == 1
 
     def test_clean_data_no_violations(self, spark):
-        df = self._visit(spark, [self._clean_row()])
-        results = validate_visit_occurrence(df, self._person(spark))
-        assert all(r.count == 0 for r in results)
-
-    def test_null_person_id(self, spark):
-        df = self._visit(spark, [(10, None, 9202, D1, D2)])
-        r = _result(validate_visit_occurrence(df, self._person(spark)), "null_person_id")
-        assert r.count == 1
-
-    def test_null_visit_concept_id(self, spark):
-        df = self._visit(spark, [(10, 1, None, D1, D2)])
-        r = _result(validate_visit_occurrence(df, self._person(spark)), "null_visit_concept_id")
-        assert r.count == 1
-
-    def test_null_visit_start_date(self, spark):
-        df = self._visit(spark, [(10, 1, 9202, None, D2)])
-        r = _result(validate_visit_occurrence(df, self._person(spark)), "null_visit_start_date")
-        assert r.count == 1
-
-    def test_null_visit_end_date(self, spark):
-        df = self._visit(spark, [(10, 1, 9202, D1, None)])
-        r = _result(validate_visit_occurrence(df, self._person(spark)), "null_visit_end_date")
-        assert r.count == 1
-
-    def test_bad_date_end_before_start(self, spark):
-        df = self._visit(spark, [(10, 1, 9202, D2, D1)])  # end < start
-        r = _result(validate_visit_occurrence(df, self._person(spark)), "bad_date_visit_end_date")
-        assert r.count == 1
-
-    def test_orphan_person_id(self, spark):
-        df = self._visit(spark, [(10, 99, 9202, D1, D2)])  # person 99 not in parent
-        r = _result(validate_visit_occurrence(df, self._person(spark)), "orphan_person_id")
-        assert r.count == 1
-
-    def test_dup_pk(self, spark):
-        df = self._visit(spark, [self._clean_row(), self._clean_row()])
-        r = _result(validate_visit_occurrence(df, self._person(spark)), "dup_pk")
-        assert r.count == 1
+        person = spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+        df = spark.createDataFrame([(10, 1, 9202, D1, D2)], VISIT_SCHEMA)
+        assert all(r.count == 0 for r in validate_visit_occurrence(df, person))
 
 
 # ---------------------------------------------------------------------------
@@ -194,45 +196,47 @@ class TestValidateVisitOccurrence:
 # ---------------------------------------------------------------------------
 
 class TestValidateConditionOccurrence:
-    def _cond(self, spark, rows):
-        return spark.createDataFrame(rows, CONDITION_SCHEMA)
+    """Combined dirty dataset covers 5 of 7 checks in one call; clean-data and
+    the null-end-date-allowed case stay separate since each needs its own
+    isolated dataset to precisely prove its (often negative) claim."""
 
-    def _clean_row(self):
-        return (100, 1, 201826, D1, D2)
+    @pytest.fixture(scope="class")
+    def dirty_results(self, spark):
+        rows = [
+            (100, 1, 201826, D1, D2),     # baseline (not itself asserted on)
+            (101, None, 201826, D1, D2),  # null_person_id
+            (102, 1, None, D1, D2),       # null_condition_concept_id
+            (103, 1, 201826, None, D2),   # null_condition_start_date
+            (104, 1, 201826, D2, D1),     # bad_date_condition_end_date (end<start)
+            (105, 1, 201826, D1, D2),     # dup_pk pair
+            (105, 1, 201826, D1, D2),
+        ]
+        df = spark.createDataFrame(rows, CONDITION_SCHEMA)
+        return validate_condition_occurrence(df)
 
-    def test_clean_data_no_violations(self, spark):
-        df = self._cond(spark, [self._clean_row()])
-        assert all(r.count == 0 for r in validate_condition_occurrence(df))
+    def test_null_person_id(self, dirty_results):
+        assert _result(dirty_results, "null_person_id").count == 1
 
-    def test_null_person_id(self, spark):
-        df = self._cond(spark, [(100, None, 201826, D1, D2)])
-        r = _result(validate_condition_occurrence(df), "null_person_id")
-        assert r.count == 1
+    def test_null_condition_concept_id(self, dirty_results):
+        assert _result(dirty_results, "null_condition_concept_id").count == 1
 
-    def test_null_condition_concept_id(self, spark):
-        df = self._cond(spark, [(100, 1, None, D1, D2)])
-        r = _result(validate_condition_occurrence(df), "null_condition_concept_id")
-        assert r.count == 1
+    def test_null_condition_start_date(self, dirty_results):
+        assert _result(dirty_results, "null_condition_start_date").count == 1
 
-    def test_null_condition_start_date(self, spark):
-        df = self._cond(spark, [(100, 1, 201826, None, D2)])
-        r = _result(validate_condition_occurrence(df), "null_condition_start_date")
-        assert r.count == 1
+    def test_bad_date_end_before_start(self, dirty_results):
+        assert _result(dirty_results, "bad_date_condition_end_date").count == 1
 
-    def test_bad_date_end_before_start(self, spark):
-        df = self._cond(spark, [(100, 1, 201826, D2, D1)])
-        r = _result(validate_condition_occurrence(df), "bad_date_condition_end_date")
-        assert r.count == 1
+    def test_dup_pk(self, dirty_results):
+        assert _result(dirty_results, "dup_pk").count == 1
 
     def test_null_end_date_is_allowed(self, spark):
-        df = self._cond(spark, [(100, 1, 201826, D1, None)])
+        df = spark.createDataFrame([(100, 1, 201826, D1, None)], CONDITION_SCHEMA)
         r = _result(validate_condition_occurrence(df), "bad_date_condition_end_date")
         assert r.count == 0
 
-    def test_dup_pk(self, spark):
-        df = self._cond(spark, [self._clean_row(), self._clean_row()])
-        r = _result(validate_condition_occurrence(df), "dup_pk")
-        assert r.count == 1
+    def test_clean_data_no_violations(self, spark):
+        df = spark.createDataFrame([(100, 1, 201826, D1, D2)], CONDITION_SCHEMA)
+        assert all(r.count == 0 for r in validate_condition_occurrence(df))
 
 
 # ---------------------------------------------------------------------------
@@ -240,65 +244,63 @@ class TestValidateConditionOccurrence:
 # ---------------------------------------------------------------------------
 
 class TestValidateDrugExposure:
-    def _drug(self, spark, rows):
-        return spark.createDataFrame(rows, DRUG_SCHEMA)
+    """Combined dirty dataset covers 9 of 11 checks in one call; clean-data and
+    the zero-is-not-negative case stay separate to avoid two tests silently
+    asserting the exact same aggregate value under different names."""
 
-    def _clean_row(self):
-        return (200, 1, 1503184, D1, D2, 30, 1.0)
+    @pytest.fixture(scope="class")
+    def dirty_results(self, spark):
+        rows = [
+            (200, 1, 1503184, D1, D2, 30, 1.0),      # baseline (not itself asserted on)
+            (201, None, 1503184, D1, D2, 30, 1.0),   # null_person_id
+            (202, 1, None, D1, D2, 30, 1.0),          # null_drug_concept_id
+            (203, 1, 1503184, None, D2, 30, 1.0),     # null_drug_exposure_start_date
+            (204, 1, 1503184, D1, D2, None, 1.0),     # null_days_supply
+            (205, 1, 1503184, D1, D2, 30, None),      # null_quantity
+            (206, 1, 1503184, D2, D1, 30, 1.0),       # bad_date_drug_exposure_end_date
+            (207, 1, 1503184, D1, D2, -1, 1.0),       # neg_days_supply
+            (208, 1, 1503184, D1, D2, 30, -0.5),      # neg_quantity
+            (209, 1, 1503184, D1, D2, 30, 1.0),       # dup_pk pair
+            (209, 1, 1503184, D1, D2, 30, 1.0),
+        ]
+        df = spark.createDataFrame(rows, DRUG_SCHEMA)
+        return validate_drug_exposure(df)
 
-    def test_clean_data_no_violations(self, spark):
-        df = self._drug(spark, [self._clean_row()])
-        assert all(r.count == 0 for r in validate_drug_exposure(df))
+    def test_null_person_id(self, dirty_results):
+        assert _result(dirty_results, "null_person_id").count == 1
 
-    def test_null_person_id(self, spark):
-        df = self._drug(spark, [(200, None, 1503184, D1, D2, 30, 1.0)])
-        r = _result(validate_drug_exposure(df), "null_person_id")
-        assert r.count == 1
+    def test_null_drug_concept_id(self, dirty_results):
+        assert _result(dirty_results, "null_drug_concept_id").count == 1
 
-    def test_null_drug_concept_id(self, spark):
-        df = self._drug(spark, [(200, 1, None, D1, D2, 30, 1.0)])
-        r = _result(validate_drug_exposure(df), "null_drug_concept_id")
-        assert r.count == 1
+    def test_null_drug_exposure_start_date(self, dirty_results):
+        assert _result(dirty_results, "null_drug_exposure_start_date").count == 1
 
-    def test_null_drug_exposure_start_date(self, spark):
-        df = self._drug(spark, [(200, 1, 1503184, None, D2, 30, 1.0)])
-        r = _result(validate_drug_exposure(df), "null_drug_exposure_start_date")
-        assert r.count == 1
+    def test_null_days_supply(self, dirty_results):
+        assert _result(dirty_results, "null_days_supply").count == 1
 
-    def test_null_days_supply(self, spark):
-        df = self._drug(spark, [(200, 1, 1503184, D1, D2, None, 1.0)])
-        r = _result(validate_drug_exposure(df), "null_days_supply")
-        assert r.count == 1
+    def test_null_quantity(self, dirty_results):
+        assert _result(dirty_results, "null_quantity").count == 1
 
-    def test_null_quantity(self, spark):
-        df = self._drug(spark, [(200, 1, 1503184, D1, D2, 30, None)])
-        r = _result(validate_drug_exposure(df), "null_quantity")
-        assert r.count == 1
+    def test_bad_date_end_before_start(self, dirty_results):
+        assert _result(dirty_results, "bad_date_drug_exposure_end_date").count == 1
 
-    def test_bad_date_end_before_start(self, spark):
-        df = self._drug(spark, [(200, 1, 1503184, D2, D1, 30, 1.0)])
-        r = _result(validate_drug_exposure(df), "bad_date_drug_exposure_end_date")
-        assert r.count == 1
+    def test_negative_days_supply(self, dirty_results):
+        assert _result(dirty_results, "neg_days_supply").count == 1
 
-    def test_negative_days_supply(self, spark):
-        df = self._drug(spark, [(200, 1, 1503184, D1, D2, -1, 1.0)])
-        r = _result(validate_drug_exposure(df), "neg_days_supply")
-        assert r.count == 1
+    def test_negative_quantity(self, dirty_results):
+        assert _result(dirty_results, "neg_quantity").count == 1
 
-    def test_negative_quantity(self, spark):
-        df = self._drug(spark, [(200, 1, 1503184, D1, D2, 30, -0.5)])
-        r = _result(validate_drug_exposure(df), "neg_quantity")
-        assert r.count == 1
+    def test_dup_pk(self, dirty_results):
+        assert _result(dirty_results, "dup_pk").count == 1
 
     def test_zero_days_supply_is_not_negative(self, spark):
-        df = self._drug(spark, [(200, 1, 1503184, D1, D2, 0, 1.0)])
+        df = spark.createDataFrame([(200, 1, 1503184, D1, D2, 0, 1.0)], DRUG_SCHEMA)
         r = _result(validate_drug_exposure(df), "neg_days_supply")
         assert r.count == 0
 
-    def test_dup_pk(self, spark):
-        df = self._drug(spark, [self._clean_row(), self._clean_row()])
-        r = _result(validate_drug_exposure(df), "dup_pk")
-        assert r.count == 1
+    def test_clean_data_no_violations(self, spark):
+        df = spark.createDataFrame([(200, 1, 1503184, D1, D2, 30, 1.0)], DRUG_SCHEMA)
+        assert all(r.count == 0 for r in validate_drug_exposure(df))
 
 
 # ---------------------------------------------------------------------------
@@ -306,53 +308,52 @@ class TestValidateDrugExposure:
 # ---------------------------------------------------------------------------
 
 class TestValidateMeasurement:
-    def _meas(self, spark, rows):
-        return spark.createDataFrame(rows, MEASUREMENT_SCHEMA)
+    """One combined dirty dataset covers all 7 checks in a single
+    validate_measurement() call; clean-data stays separate since it's a
+    distinct all-valid dataset."""
 
-    def _person(self, spark):
-        return spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+    @pytest.fixture(scope="class")
+    def dirty_results(self, spark):
+        person = spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+        rows = [
+            (300, 1, 3004410, D1, 5.5),      # baseline (not itself asserted on)
+            (301, None, 3004410, D1, 5.5),   # null_person_id
+            (302, 1, None, D1, 5.5),         # null_measurement_concept_id
+            (303, 1, 3004410, None, 5.5),    # null_measurement_date
+            (304, 1, 3004410, D1, None),     # null_value_as_number
+            (305, 1, 3004410, D1, -1.0),     # neg_value_as_number
+            (306, 99, 3004410, D1, 5.5),     # orphan_person_id (person 99 not in parent)
+            (307, 1, 3004410, D1, 5.5),      # dup_pk pair
+            (307, 1, 3004410, D1, 5.5),
+        ]
+        df = spark.createDataFrame(rows, MEASUREMENT_SCHEMA)
+        return validate_measurement(df, person)
 
-    def _clean_row(self):
-        return (300, 1, 3004410, D1, 5.5)
+    def test_null_person_id(self, dirty_results):
+        assert _result(dirty_results, "null_person_id").count == 1
+
+    def test_null_measurement_concept_id(self, dirty_results):
+        assert _result(dirty_results, "null_measurement_concept_id").count == 1
+
+    def test_null_measurement_date(self, dirty_results):
+        assert _result(dirty_results, "null_measurement_date").count == 1
+
+    def test_null_value_as_number(self, dirty_results):
+        assert _result(dirty_results, "null_value_as_number").count == 1
+
+    def test_negative_value_as_number(self, dirty_results):
+        assert _result(dirty_results, "neg_value_as_number").count == 1
+
+    def test_orphan_person_id(self, dirty_results):
+        assert _result(dirty_results, "orphan_person_id").count == 1
+
+    def test_dup_pk(self, dirty_results):
+        assert _result(dirty_results, "dup_pk").count == 1
 
     def test_clean_data_no_violations(self, spark):
-        df = self._meas(spark, [self._clean_row()])
-        assert all(r.count == 0 for r in validate_measurement(df, self._person(spark)))
-
-    def test_null_person_id(self, spark):
-        df = self._meas(spark, [(300, None, 3004410, D1, 5.5)])
-        r = _result(validate_measurement(df, self._person(spark)), "null_person_id")
-        assert r.count == 1
-
-    def test_null_measurement_concept_id(self, spark):
-        df = self._meas(spark, [(300, 1, None, D1, 5.5)])
-        r = _result(validate_measurement(df, self._person(spark)), "null_measurement_concept_id")
-        assert r.count == 1
-
-    def test_null_measurement_date(self, spark):
-        df = self._meas(spark, [(300, 1, 3004410, None, 5.5)])
-        r = _result(validate_measurement(df, self._person(spark)), "null_measurement_date")
-        assert r.count == 1
-
-    def test_null_value_as_number(self, spark):
-        df = self._meas(spark, [(300, 1, 3004410, D1, None)])
-        r = _result(validate_measurement(df, self._person(spark)), "null_value_as_number")
-        assert r.count == 1
-
-    def test_negative_value_as_number(self, spark):
-        df = self._meas(spark, [(300, 1, 3004410, D1, -1.0)])
-        r = _result(validate_measurement(df, self._person(spark)), "neg_value_as_number")
-        assert r.count == 1
-
-    def test_orphan_person_id(self, spark):
-        df = self._meas(spark, [(300, 99, 3004410, D1, 5.5)])  # person 99 not in parent
-        r = _result(validate_measurement(df, self._person(spark)), "orphan_person_id")
-        assert r.count == 1
-
-    def test_dup_pk(self, spark):
-        df = self._meas(spark, [self._clean_row(), self._clean_row()])
-        r = _result(validate_measurement(df, self._person(spark)), "dup_pk")
-        assert r.count == 1
+        person = spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+        df = spark.createDataFrame([(300, 1, 3004410, D1, 5.5)], MEASUREMENT_SCHEMA)
+        assert all(r.count == 0 for r in validate_measurement(df, person))
 
 
 # ---------------------------------------------------------------------------
@@ -360,48 +361,50 @@ class TestValidateMeasurement:
 # ---------------------------------------------------------------------------
 
 class TestValidateNote:
-    def _note(self, spark, rows):
-        return spark.createDataFrame(rows, NOTE_SCHEMA)
+    """Combined dirty dataset covers 5 of 7 checks in one call; clean-data and
+    the null-visit-id-allowed case stay separate to avoid two tests silently
+    asserting the exact same aggregate value under different names."""
 
-    def _visit(self, spark):
-        return spark.createDataFrame([(10, 1, 9202, D1, D2)], VISIT_SCHEMA)
+    @pytest.fixture(scope="class")
+    def dirty_results(self, spark):
+        visit = spark.createDataFrame([(10, 1, 9202, D1, D2)], VISIT_SCHEMA)
+        rows = [
+            (400, 1, D1, "note text", 10),   # baseline (not itself asserted on)
+            (401, None, D1, "text", 10),     # null_person_id
+            (402, 1, None, "text", 10),      # null_note_date
+            (403, 1, D1, None, 10),          # null_note_text
+            (404, 1, D1, "text", 99),        # orphan_visit_occurrence_id (visit 99 not in parent)
+            (405, 1, D1, "text", 10),        # dup_pk pair
+            (405, 1, D1, "text", 10),
+        ]
+        df = spark.createDataFrame(rows, NOTE_SCHEMA)
+        return validate_note(df, visit)
 
-    def _clean_row(self):
-        return (400, 1, D1, "note text", 10)
+    def test_null_person_id(self, dirty_results):
+        assert _result(dirty_results, "null_person_id").count == 1
 
-    def test_clean_data_no_violations(self, spark):
-        df = self._note(spark, [self._clean_row()])
-        assert all(r.count == 0 for r in validate_note(df, self._visit(spark)))
+    def test_null_note_date(self, dirty_results):
+        assert _result(dirty_results, "null_note_date").count == 1
 
-    def test_null_person_id(self, spark):
-        df = self._note(spark, [(400, None, D1, "text", 10)])
-        r = _result(validate_note(df, self._visit(spark)), "null_person_id")
-        assert r.count == 1
+    def test_null_note_text(self, dirty_results):
+        assert _result(dirty_results, "null_note_text").count == 1
 
-    def test_null_note_date(self, spark):
-        df = self._note(spark, [(400, 1, None, "text", 10)])
-        r = _result(validate_note(df, self._visit(spark)), "null_note_date")
-        assert r.count == 1
+    def test_orphan_visit_occurrence_id(self, dirty_results):
+        assert _result(dirty_results, "orphan_visit_occurrence_id").count == 1
 
-    def test_null_note_text(self, spark):
-        df = self._note(spark, [(400, 1, D1, None, 10)])
-        r = _result(validate_note(df, self._visit(spark)), "null_note_text")
-        assert r.count == 1
-
-    def test_orphan_visit_occurrence_id(self, spark):
-        df = self._note(spark, [(400, 1, D1, "text", 99)])  # visit 99 not in parent
-        r = _result(validate_note(df, self._visit(spark)), "orphan_visit_occurrence_id")
-        assert r.count == 1
+    def test_dup_pk(self, dirty_results):
+        assert _result(dirty_results, "dup_pk").count == 1
 
     def test_null_visit_occurrence_id_is_allowed(self, spark):
-        df = self._note(spark, [(400, 1, D1, "text", None)])
-        r = _result(validate_note(df, self._visit(spark)), "orphan_visit_occurrence_id")
+        visit = spark.createDataFrame([(10, 1, 9202, D1, D2)], VISIT_SCHEMA)
+        df = spark.createDataFrame([(400, 1, D1, "text", None)], NOTE_SCHEMA)
+        r = _result(validate_note(df, visit), "orphan_visit_occurrence_id")
         assert r.count == 0
 
-    def test_dup_pk(self, spark):
-        df = self._note(spark, [self._clean_row(), self._clean_row()])
-        r = _result(validate_note(df, self._visit(spark)), "dup_pk")
-        assert r.count == 1
+    def test_clean_data_no_violations(self, spark):
+        visit = spark.createDataFrame([(10, 1, 9202, D1, D2)], VISIT_SCHEMA)
+        df = spark.createDataFrame([(400, 1, D1, "note text", 10)], NOTE_SCHEMA)
+        assert all(r.count == 0 for r in validate_note(df, visit))
 
 
 # ---------------------------------------------------------------------------

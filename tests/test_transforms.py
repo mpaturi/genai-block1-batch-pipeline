@@ -90,36 +90,42 @@ D2 = date(2020, 6, 1)
 # ---------------------------------------------------------------------------
 
 class TestCleanPerson:
-    def _df(self, spark, rows):
-        return spark.createDataFrame(rows, PERSON_SCHEMA)
+    """One combined dataset (clean row + 4 null-field cases + a duplicate
+    pair) drives clean_person() once via a shared fixture; each test checks
+    whether its own person_id survived, instead of re-running clean_person()
+    per scenario."""
 
-    def test_keeps_clean_rows(self, spark):
-        df = self._df(spark, [(1, 8507, 1980, 8516, 38003564)])
-        assert clean_person(df).count() == 1
+    @pytest.fixture(scope="class")
+    def survivor_ids(self, spark):
+        rows = [
+            (1, 8507, 1980, 8516, 38003564),   # clean -> survives
+            (2, None, 1980, 8516, 38003564),   # null gender_concept_id -> dropped
+            (3, 8507, None, 8516, 38003564),   # null year_of_birth -> dropped
+            (4, 8507, 1980, None, 38003564),   # null race_concept_id -> dropped
+            (5, 8507, 1980, 8516, None),       # null ethnicity_concept_id -> dropped
+            (6, 8507, 1980, 8516, 38003564),   # duplicate pair -> exactly 1 survives
+            (6, 8507, 1980, 8516, 38003564),
+        ]
+        df = spark.createDataFrame(rows, PERSON_SCHEMA)
+        return [row["person_id"] for row in clean_person(df).collect()]
 
-    def test_drops_null_required_field(self, spark):
-        df = self._df(spark, [
-            (1, 8507, 1980, 8516, 38003564),
-            (2, None, 1980, 8516, 38003564),  # null gender
-        ])
-        assert clean_person(df).count() == 1
+    def test_keeps_clean_rows(self, survivor_ids):
+        assert survivor_ids.count(1) == 1
 
-    def test_drops_duplicates(self, spark):
-        row = (1, 8507, 1980, 8516, 38003564)
-        df = self._df(spark, [row, row])
-        assert clean_person(df).count() == 1
+    def test_drops_null_required_field(self, survivor_ids):
+        assert 2 not in survivor_ids
 
-    def test_drops_null_year_of_birth(self, spark):
-        df = self._df(spark, [(1, 8507, None, 8516, 38003564)])
-        assert clean_person(df).count() == 0
+    def test_drops_null_year_of_birth(self, survivor_ids):
+        assert 3 not in survivor_ids
 
-    def test_drops_null_race_concept_id(self, spark):
-        df = self._df(spark, [(1, 8507, 1980, None, 38003564)])
-        assert clean_person(df).count() == 0
+    def test_drops_null_race_concept_id(self, survivor_ids):
+        assert 4 not in survivor_ids
 
-    def test_drops_null_ethnicity_concept_id(self, spark):
-        df = self._df(spark, [(1, 8507, 1980, 8516, None)])
-        assert clean_person(df).count() == 0
+    def test_drops_null_ethnicity_concept_id(self, survivor_ids):
+        assert 5 not in survivor_ids
+
+    def test_drops_duplicates(self, survivor_ids):
+        assert survivor_ids.count(6) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -127,36 +133,41 @@ class TestCleanPerson:
 # ---------------------------------------------------------------------------
 
 class TestCleanVisitOccurrence:
-    def _visit(self, spark, rows):
-        return spark.createDataFrame(rows, VISIT_SCHEMA)
+    """One combined dataset drives clean_visit_occurrence() once via a shared
+    fixture; each test checks whether its own visit_occurrence_id survived."""
 
-    def _person(self, spark):
-        return spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+    @pytest.fixture(scope="class")
+    def survivor_ids(self, spark):
+        person = spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+        rows = [
+            (10, 1, 9202, D1, D2),      # clean -> survives
+            (11, None, 9202, D1, D2),   # null person_id (required field) -> dropped
+            (12, 1, 9202, D2, D1),      # bad dates (end < start) -> dropped
+            (13, 1, 9202, D1, D1),      # end == start -> kept
+            (14, 99, 9202, D1, D2),     # orphan person_id -> dropped
+            (15, 1, 9202, D1, D2),      # duplicate pair -> exactly 1 survives
+            (15, 1, 9202, D1, D2),
+        ]
+        df = spark.createDataFrame(rows, VISIT_SCHEMA)
+        return [row["visit_occurrence_id"] for row in clean_visit_occurrence(df, person).collect()]
 
-    def test_keeps_clean_rows(self, spark):
-        df = self._visit(spark, [(10, 1, 9202, D1, D2)])
-        assert clean_visit_occurrence(df, self._person(spark)).count() == 1
+    def test_keeps_clean_rows(self, survivor_ids):
+        assert survivor_ids.count(10) == 1
 
-    def test_drops_null_required_field(self, spark):
-        df = self._visit(spark, [(10, None, 9202, D1, D2)])
-        assert clean_visit_occurrence(df, self._person(spark)).count() == 0
+    def test_drops_null_required_field(self, survivor_ids):
+        assert 11 not in survivor_ids
 
-    def test_drops_bad_dates(self, spark):
-        df = self._visit(spark, [(10, 1, 9202, D2, D1)])  # end < start
-        assert clean_visit_occurrence(df, self._person(spark)).count() == 0
+    def test_drops_bad_dates(self, survivor_ids):
+        assert 12 not in survivor_ids
 
-    def test_keeps_row_when_end_equals_start(self, spark):
-        df = self._visit(spark, [(10, 1, 9202, D1, D1)])
-        assert clean_visit_occurrence(df, self._person(spark)).count() == 1
+    def test_keeps_row_when_end_equals_start(self, survivor_ids):
+        assert survivor_ids.count(13) == 1
 
-    def test_drops_orphan_person_id(self, spark):
-        df = self._visit(spark, [(10, 99, 9202, D1, D2)])  # person 99 absent
-        assert clean_visit_occurrence(df, self._person(spark)).count() == 0
+    def test_drops_orphan_person_id(self, survivor_ids):
+        assert 14 not in survivor_ids
 
-    def test_drops_duplicates(self, spark):
-        row = (10, 1, 9202, D1, D2)
-        df = self._visit(spark, [row, row])
-        assert clean_visit_occurrence(df, self._person(spark)).count() == 1
+    def test_drops_duplicates(self, survivor_ids):
+        assert survivor_ids.count(15) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -164,29 +175,37 @@ class TestCleanVisitOccurrence:
 # ---------------------------------------------------------------------------
 
 class TestCleanConditionOccurrence:
-    def _df(self, spark, rows):
-        return spark.createDataFrame(rows, CONDITION_SCHEMA)
+    """One combined dataset drives clean_condition_occurrence() once via a
+    shared fixture; each test checks whether its own condition_occurrence_id
+    survived."""
 
-    def test_keeps_clean_rows(self, spark):
-        df = self._df(spark, [(100, 1, 201826, D1, D2)])
-        assert clean_condition_occurrence(df).count() == 1
+    @pytest.fixture(scope="class")
+    def survivor_ids(self, spark):
+        rows = [
+            (100, 1, 201826, D1, D2),     # clean -> survives
+            (101, None, 201826, D1, D2),  # null person_id (required field) -> dropped
+            (102, 1, 201826, D2, D1),     # bad dates (end < start) -> dropped
+            (103, 1, 201826, D1, None),   # null end date -> kept
+            (104, 1, 201826, D1, D2),     # duplicate pair -> exactly 1 survives
+            (104, 1, 201826, D1, D2),
+        ]
+        df = spark.createDataFrame(rows, CONDITION_SCHEMA)
+        return [row["condition_occurrence_id"] for row in clean_condition_occurrence(df).collect()]
 
-    def test_drops_null_required_field(self, spark):
-        df = self._df(spark, [(100, None, 201826, D1, D2)])
-        assert clean_condition_occurrence(df).count() == 0
+    def test_keeps_clean_rows(self, survivor_ids):
+        assert survivor_ids.count(100) == 1
 
-    def test_drops_bad_dates(self, spark):
-        df = self._df(spark, [(100, 1, 201826, D2, D1)])
-        assert clean_condition_occurrence(df).count() == 0
+    def test_drops_null_required_field(self, survivor_ids):
+        assert 101 not in survivor_ids
 
-    def test_keeps_null_end_date(self, spark):
-        df = self._df(spark, [(100, 1, 201826, D1, None)])
-        assert clean_condition_occurrence(df).count() == 1
+    def test_drops_bad_dates(self, survivor_ids):
+        assert 102 not in survivor_ids
 
-    def test_drops_duplicates(self, spark):
-        row = (100, 1, 201826, D1, D2)
-        df = self._df(spark, [row, row])
-        assert clean_condition_occurrence(df).count() == 1
+    def test_keeps_null_end_date(self, survivor_ids):
+        assert survivor_ids.count(103) == 1
+
+    def test_drops_duplicates(self, survivor_ids):
+        assert survivor_ids.count(104) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -194,37 +213,44 @@ class TestCleanConditionOccurrence:
 # ---------------------------------------------------------------------------
 
 class TestCleanDrugExposure:
-    def _df(self, spark, rows):
-        return spark.createDataFrame(rows, DRUG_SCHEMA)
+    """One combined dataset drives clean_drug_exposure() once via a shared
+    fixture; each test checks whether its own drug_exposure_id survived."""
 
-    def test_keeps_clean_rows(self, spark):
-        df = self._df(spark, [(200, 1, 1503184, D1, D2, 30, 1.0)])
-        assert clean_drug_exposure(df).count() == 1
+    @pytest.fixture(scope="class")
+    def survivor_ids(self, spark):
+        rows = [
+            (200, 1, 1503184, D1, D2, 30, 1.0),    # clean -> survives
+            (201, None, 1503184, D1, D2, 30, 1.0), # null person_id (required field) -> dropped
+            (202, 1, 1503184, D2, D1, 30, 1.0),    # bad dates (end < start) -> dropped
+            (203, 1, 1503184, D1, D2, -1, 1.0),    # negative days_supply -> dropped
+            (204, 1, 1503184, D1, D2, 30, -0.5),   # negative quantity -> dropped
+            (205, 1, 1503184, D1, D2, 0, 1.0),     # zero days_supply -> kept
+            (206, 1, 1503184, D1, D2, 30, 1.0),    # duplicate pair -> exactly 1 survives
+            (206, 1, 1503184, D1, D2, 30, 1.0),
+        ]
+        df = spark.createDataFrame(rows, DRUG_SCHEMA)
+        return [row["drug_exposure_id"] for row in clean_drug_exposure(df).collect()]
 
-    def test_drops_null_required_field(self, spark):
-        df = self._df(spark, [(200, None, 1503184, D1, D2, 30, 1.0)])
-        assert clean_drug_exposure(df).count() == 0
+    def test_keeps_clean_rows(self, survivor_ids):
+        assert survivor_ids.count(200) == 1
 
-    def test_drops_bad_dates(self, spark):
-        df = self._df(spark, [(200, 1, 1503184, D2, D1, 30, 1.0)])
-        assert clean_drug_exposure(df).count() == 0
+    def test_drops_null_required_field(self, survivor_ids):
+        assert 201 not in survivor_ids
 
-    def test_drops_negative_days_supply(self, spark):
-        df = self._df(spark, [(200, 1, 1503184, D1, D2, -1, 1.0)])
-        assert clean_drug_exposure(df).count() == 0
+    def test_drops_bad_dates(self, survivor_ids):
+        assert 202 not in survivor_ids
 
-    def test_drops_negative_quantity(self, spark):
-        df = self._df(spark, [(200, 1, 1503184, D1, D2, 30, -0.5)])
-        assert clean_drug_exposure(df).count() == 0
+    def test_drops_negative_days_supply(self, survivor_ids):
+        assert 203 not in survivor_ids
 
-    def test_keeps_zero_days_supply(self, spark):
-        df = self._df(spark, [(200, 1, 1503184, D1, D2, 0, 1.0)])
-        assert clean_drug_exposure(df).count() == 1
+    def test_drops_negative_quantity(self, survivor_ids):
+        assert 204 not in survivor_ids
 
-    def test_drops_duplicates(self, spark):
-        row = (200, 1, 1503184, D1, D2, 30, 1.0)
-        df = self._df(spark, [row, row])
-        assert clean_drug_exposure(df).count() == 1
+    def test_keeps_zero_days_supply(self, survivor_ids):
+        assert survivor_ids.count(205) == 1
+
+    def test_drops_duplicates(self, survivor_ids):
+        assert survivor_ids.count(206) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -232,32 +258,37 @@ class TestCleanDrugExposure:
 # ---------------------------------------------------------------------------
 
 class TestCleanMeasurement:
-    def _meas(self, spark, rows):
-        return spark.createDataFrame(rows, MEASUREMENT_SCHEMA)
+    """One combined dataset drives clean_measurement() once via a shared
+    fixture; each test checks whether its own measurement_id survived."""
 
-    def _person(self, spark):
-        return spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+    @pytest.fixture(scope="class")
+    def survivor_ids(self, spark):
+        person = spark.createDataFrame([(1, 8507, 1980, 8516, 38003564)], PERSON_SCHEMA)
+        rows = [
+            (300, 1, 3004410, D1, 5.5),     # clean -> survives
+            (301, None, 3004410, D1, 5.5),  # null person_id (required field) -> dropped
+            (302, 1, 3004410, D1, -1.0),    # negative value_as_number -> dropped
+            (303, 99, 3004410, D1, 5.5),    # orphan person_id -> dropped
+            (304, 1, 3004410, D1, 5.5),     # duplicate pair -> exactly 1 survives
+            (304, 1, 3004410, D1, 5.5),
+        ]
+        df = spark.createDataFrame(rows, MEASUREMENT_SCHEMA)
+        return [row["measurement_id"] for row in clean_measurement(df, person).collect()]
 
-    def test_keeps_clean_rows(self, spark):
-        df = self._meas(spark, [(300, 1, 3004410, D1, 5.5)])
-        assert clean_measurement(df, self._person(spark)).count() == 1
+    def test_keeps_clean_rows(self, survivor_ids):
+        assert survivor_ids.count(300) == 1
 
-    def test_drops_null_required_field(self, spark):
-        df = self._meas(spark, [(300, None, 3004410, D1, 5.5)])
-        assert clean_measurement(df, self._person(spark)).count() == 0
+    def test_drops_null_required_field(self, survivor_ids):
+        assert 301 not in survivor_ids
 
-    def test_drops_negative_value(self, spark):
-        df = self._meas(spark, [(300, 1, 3004410, D1, -1.0)])
-        assert clean_measurement(df, self._person(spark)).count() == 0
+    def test_drops_negative_value(self, survivor_ids):
+        assert 302 not in survivor_ids
 
-    def test_drops_orphan_person_id(self, spark):
-        df = self._meas(spark, [(300, 99, 3004410, D1, 5.5)])
-        assert clean_measurement(df, self._person(spark)).count() == 0
+    def test_drops_orphan_person_id(self, survivor_ids):
+        assert 303 not in survivor_ids
 
-    def test_drops_duplicates(self, spark):
-        row = (300, 1, 3004410, D1, 5.5)
-        df = self._meas(spark, [row, row])
-        assert clean_measurement(df, self._person(spark)).count() == 1
+    def test_drops_duplicates(self, survivor_ids):
+        assert survivor_ids.count(304) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -265,32 +296,37 @@ class TestCleanMeasurement:
 # ---------------------------------------------------------------------------
 
 class TestCleanNote:
-    def _note(self, spark, rows):
-        return spark.createDataFrame(rows, NOTE_SCHEMA)
+    """One combined dataset drives clean_note() once via a shared fixture;
+    each test checks whether its own note_id survived."""
 
-    def _visit(self, spark):
-        return spark.createDataFrame([(10, 1, 9202, D1, D2)], VISIT_SCHEMA)
+    @pytest.fixture(scope="class")
+    def survivor_ids(self, spark):
+        visit = spark.createDataFrame([(10, 1, 9202, D1, D2)], VISIT_SCHEMA)
+        rows = [
+            (400, 1, D1, "text", 10),    # clean -> survives
+            (401, 1, D1, None, 10),      # null note_text (required field) -> dropped
+            (402, 1, D1, "text", 99),    # orphan visit_occurrence_id -> dropped
+            (403, 1, D1, "text", None),  # null visit_occurrence_id -> kept
+            (404, 1, D1, "text", 10),    # duplicate pair -> exactly 1 survives
+            (404, 1, D1, "text", 10),
+        ]
+        df = spark.createDataFrame(rows, NOTE_SCHEMA)
+        return [row["note_id"] for row in clean_note(df, visit).collect()]
 
-    def test_keeps_clean_rows(self, spark):
-        df = self._note(spark, [(400, 1, D1, "text", 10)])
-        assert clean_note(df, self._visit(spark)).count() == 1
+    def test_keeps_clean_rows(self, survivor_ids):
+        assert survivor_ids.count(400) == 1
 
-    def test_drops_null_required_field(self, spark):
-        df = self._note(spark, [(400, 1, D1, None, 10)])
-        assert clean_note(df, self._visit(spark)).count() == 0
+    def test_drops_null_required_field(self, survivor_ids):
+        assert 401 not in survivor_ids
 
-    def test_drops_orphan_visit(self, spark):
-        df = self._note(spark, [(400, 1, D1, "text", 99)])  # visit 99 absent
-        assert clean_note(df, self._visit(spark)).count() == 0
+    def test_drops_orphan_visit(self, survivor_ids):
+        assert 402 not in survivor_ids
 
-    def test_keeps_null_visit_occurrence_id(self, spark):
-        df = self._note(spark, [(400, 1, D1, "text", None)])
-        assert clean_note(df, self._visit(spark)).count() == 1
+    def test_keeps_null_visit_occurrence_id(self, survivor_ids):
+        assert survivor_ids.count(403) == 1
 
-    def test_drops_duplicates(self, spark):
-        row = (400, 1, D1, "text", 10)
-        df = self._note(spark, [row, row])
-        assert clean_note(df, self._visit(spark)).count() == 1
+    def test_drops_duplicates(self, survivor_ids):
+        assert survivor_ids.count(404) == 1
 
 
 # ---------------------------------------------------------------------------

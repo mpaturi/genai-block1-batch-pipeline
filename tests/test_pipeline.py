@@ -121,11 +121,10 @@ class TestValidateCleaned:
     def test_passes_silently_with_clean_tables(self, tables):
         _validate_cleaned(tables)  # should not raise
 
-    def test_raises_when_violations_remain(self, dirty_tables):
-        with pytest.raises(PipelineValidationError):
-            _validate_cleaned(dirty_tables)
-
-    def test_error_message_names_the_violation(self, dirty_tables):
+    def test_raises_with_violation_named_in_message(self, dirty_tables):
+        # Combines what were two separate tests (raises + message content)
+        # into one call to _validate_cleaned(), since match=... already
+        # proves both properties from a single expensive Spark-backed call.
         with pytest.raises(PipelineValidationError, match="null_gender_concept_id"):
             _validate_cleaned(dirty_tables)
 
