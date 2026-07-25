@@ -180,7 +180,7 @@ Synthea's CSV export does not include free-text clinical notes. `src/generator.p
 
 ### Target scale
 
-`src/generator.py` targets roughly 10,000 PERSON rows, tuned so the combined row count across all six tables stays under roughly 100,000.
+`src/generator.py` targets roughly 10,000 PERSON rows, tuned so the combined row count across all six tables stays close to 100,000; generator.py only logs a warning if the total exceeds 1.5x that target (150,000).
 
 ## Analytic output
 
