@@ -6,7 +6,10 @@ data/raw/.
 Run directly:  python -m src.generator
 """
 
+import json
+import logging
 import random
+from datetime import datetime, timezone
 
 import pandas as pd
 
@@ -17,6 +20,7 @@ from src.config import (
     MIN_DAYS_SUPPLY,
     RANDOM_SEED,
     RAW_DIR,
+    REFERENCE_DATE,
     SYNTHEA_RAW_DIR,
     TOTAL_ROW_BUDGET,
     VISITS_PER_PERSON,
@@ -31,6 +35,14 @@ from src.concepts import (
     UNIT_CONCEPT_ID,
     VISIT_CONCEPT_ID,
 )
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger(__name__)
+
 
 def _csv(name: str) -> pd.DataFrame:
     """Read a Synthea CSV by table name (no extension)."""
@@ -50,7 +62,7 @@ def _map_person() -> tuple[pd.DataFrame, dict[str, int]]:
 
     person_id_map = {uuid: i + 1 for i, uuid in enumerate(df["Id"])}
     df["person_id"] = df["Id"].map(person_id_map).astype(int)
-    df["gender_concept_id"] = df["GENDER"].map(GENDER_CONCEPT_ID)
+    df["gender_concept_id"] = df["GENDER"].str.upper().map(GENDER_CONCEPT_ID)
     df["race_concept_id"] = df["RACE"].str.lower().map(RACE_CONCEPT_ID)
     df["ethnicity_concept_id"] = df["ETHNICITY"].str.lower().map(ETHNICITY_CONCEPT_ID)
     df["year_of_birth"] = pd.to_datetime(df["BIRTHDATE"]).dt.year.astype(int)
@@ -60,7 +72,7 @@ def _map_person() -> tuple[pd.DataFrame, dict[str, int]]:
     df = df.dropna(subset=["gender_concept_id", "race_concept_id", "ethnicity_concept_id"])
     dropped = before - len(df)
     if dropped:
-        print(f"[PERSON] dropped {dropped} rows with unmapped concept codes")
+        log.info("[PERSON] dropped %d rows with unmapped concept codes", dropped)
 
     for col in ["gender_concept_id", "race_concept_id", "ethnicity_concept_id"]:
         df[col] = df[col].astype(int)
@@ -87,7 +99,7 @@ def _map_visit_occurrence(person_id_map: dict[str, int]) -> tuple[pd.DataFrame, 
     df = df.dropna(subset=["person_id", "visit_concept_id", "visit_start_date"])
     dropped = before - len(df)
     if dropped:
-        print(f"[VISIT_OCCURRENCE] dropped {dropped} rows with unmapped/missing values")
+        log.info("[VISIT_OCCURRENCE] dropped %d rows with unmapped/missing values", dropped)
 
     # Cap at VISITS_PER_PERSON most recent visits per person
     df = (
@@ -96,7 +108,7 @@ def _map_visit_occurrence(person_id_map: dict[str, int]) -> tuple[pd.DataFrame, 
           .head(VISITS_PER_PERSON)
           .reset_index(drop=True)
     )
-    print(f"[VISIT_OCCURRENCE] capped to {VISITS_PER_PERSON} visits/person: {len(df):,} rows retained")
+    log.info("[VISIT_OCCURRENCE] capped to %d visits/person: %d rows retained", VISITS_PER_PERSON, len(df))
 
     included_encounter_uuids = set(df["Id"])
     visit_id_map = {uuid: i + 1 for i, uuid in enumerate(df["Id"])}
@@ -116,7 +128,11 @@ def _map_condition_occurrence(person_id_map: dict[str, int], visit_id_map: dict[
 
     # Whitelist filter — drop any SNOMED code not in our 3-condition dict
     df["condition_concept_id"] = df["CODE"].map(CONDITION_CONCEPT_ID)
+    before = len(df)
     df = df.dropna(subset=["condition_concept_id"])
+    dropped = before - len(df)
+    if dropped:
+        log.info("[CONDITION_OCCURRENCE] dropped %d rows with unmapped condition code", dropped)
 
     df["person_id"] = df["PATIENT"].map(person_id_map)
     df["visit_occurrence_id"] = df["ENCOUNTER"].map(visit_id_map).astype("Int64")
@@ -127,7 +143,7 @@ def _map_condition_occurrence(person_id_map: dict[str, int], visit_id_map: dict[
     df = df.dropna(subset=["person_id", "condition_start_date"])
     dropped = before - len(df)
     if dropped:
-        print(f"[CONDITION_OCCURRENCE] dropped {dropped} rows with missing required values")
+        log.info("[CONDITION_OCCURRENCE] dropped %d rows with missing required values", dropped)
 
     df = df.reset_index(drop=True)
     df["condition_occurrence_id"] = df.index + 1
@@ -147,7 +163,11 @@ def _map_drug_exposure(person_id_map: dict[str, int], included_encounter_uuids: 
 
     # Whitelist filter — drop any RxNorm code not in our 6-drug dict
     df["drug_concept_id"] = df["CODE"].map(DRUG_CONCEPT_ID)
+    before = len(df)
     df = df.dropna(subset=["drug_concept_id"])
+    dropped = before - len(df)
+    if dropped:
+        log.info("[DRUG_EXPOSURE] dropped %d rows with unmapped drug code", dropped)
 
     df["person_id"] = df["PATIENT"].map(person_id_map)
     df["drug_exposure_start_date"] = pd.to_datetime(df["START"], errors="coerce").dt.date
@@ -164,7 +184,7 @@ def _map_drug_exposure(person_id_map: dict[str, int], included_encounter_uuids: 
     df = df.dropna(subset=["person_id", "drug_exposure_start_date"])
     dropped = before - len(df)
     if dropped:
-        print(f"[DRUG_EXPOSURE] dropped {dropped} rows with missing required values")
+        log.info("[DRUG_EXPOSURE] dropped %d rows with missing required values", dropped)
 
     df = df.reset_index(drop=True)
     df["drug_exposure_id"] = df.index + 1
@@ -188,7 +208,11 @@ def _map_measurement(
 
     # Whitelist filter — keep only our 5 LOINC codes
     df["measurement_concept_id"] = df["CODE"].map(MEASUREMENT_CONCEPT_ID)
+    before = len(df)
     df = df.dropna(subset=["measurement_concept_id"])
+    dropped = before - len(df)
+    if dropped:
+        log.info("[MEASUREMENT] dropped %d rows with unmapped measurement code", dropped)
 
     df["person_id"] = df["PATIENT"].map(person_id_map)
     df["visit_occurrence_id"] = df["ENCOUNTER"].map(visit_id_map).astype("Int64")
@@ -201,7 +225,7 @@ def _map_measurement(
     df = df.dropna(subset=["person_id", "measurement_date", "value_as_number"])
     dropped = before - len(df)
     if dropped:
-        print(f"[MEASUREMENT] dropped {dropped} rows with missing required values")
+        log.info("[MEASUREMENT] dropped %d rows with missing required values", dropped)
 
     df = df.reset_index(drop=True)
     df["measurement_id"] = df.index + 1
@@ -265,6 +289,10 @@ def _inject_dirty_data(
     note: pd.DataFrame,
 ) -> tuple[pd.DataFrame, ...]:
     """Inject ~DIRTY_DATA_FRACTION of rows/values with known data quality issues."""
+    # One rng instance is reused sequentially across all null/bad-date/negative/
+    # duplicate injections below. Counts stay deterministic regardless of call
+    # order, but reordering these calls would change *which* specific rows get
+    # dirtied for a given seed — keep the order stable if reproducing a past run.
     rng = random.Random(RANDOM_SEED + 1)
 
     def _n(df: pd.DataFrame) -> int:
@@ -340,9 +368,32 @@ def _inject_dirty_data(
     note = _dup(note, n_n)
 
     total = n_p + n_v + n_c + n_d + n_m + n_n
-    print(f"[DIRTY] injected ~{total} dirty rows across 6 tables ({DIRTY_DATA_FRACTION:.1%} each)")
+    log.info("[DIRTY] injected ~%d dirty rows across 6 tables (%.1f%% each)", total, DIRTY_DATA_FRACTION * 100)
 
     return person, visit, condition, drug, measurement, note
+
+
+def _write_manifest(person, visit, condition, drug, measurement, note) -> None:
+    """Write a small manifest alongside data/raw/ so staleness (e.g. a table
+    left over from a previous run with a different population size) is
+    visible at a glance instead of discovered by accident."""
+    manifest = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "random_seed": RANDOM_SEED,
+        "reference_date": REFERENCE_DATE.isoformat(),
+        "row_counts": {
+            "person": len(person),
+            "visit_occurrence": len(visit),
+            "condition_occurrence": len(condition),
+            "drug_exposure": len(drug),
+            "measurement": len(measurement),
+            "note": len(note),
+        },
+    }
+    path = RAW_DIR / "_manifest.json"
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    log.info("[MANIFEST] written to %s", path)
 
 
 def generate() -> None:
@@ -364,27 +415,29 @@ def generate() -> None:
 
     # Write to data/raw/
     person.to_csv(RAW_DIR / "person.csv", index=False)
-    print(f"[PERSON] {len(person):,} rows -> data/raw/person.csv")
+    log.info("[PERSON] %d rows -> data/raw/person.csv", len(person))
 
     visit.to_csv(RAW_DIR / "visit_occurrence.csv", index=False)
-    print(f"[VISIT_OCCURRENCE] {len(visit):,} rows -> data/raw/visit_occurrence.csv")
+    log.info("[VISIT_OCCURRENCE] %d rows -> data/raw/visit_occurrence.csv", len(visit))
 
     condition.to_csv(RAW_DIR / "condition_occurrence.csv", index=False)
-    print(f"[CONDITION_OCCURRENCE] {len(condition):,} rows -> data/raw/condition_occurrence.csv")
+    log.info("[CONDITION_OCCURRENCE] %d rows -> data/raw/condition_occurrence.csv", len(condition))
 
     drug.to_csv(RAW_DIR / "drug_exposure.csv", index=False)
-    print(f"[DRUG_EXPOSURE] {len(drug):,} rows -> data/raw/drug_exposure.csv")
+    log.info("[DRUG_EXPOSURE] %d rows -> data/raw/drug_exposure.csv", len(drug))
 
     measurement.to_csv(RAW_DIR / "measurement.csv", index=False)
-    print(f"[MEASUREMENT] {len(measurement):,} rows -> data/raw/measurement.csv")
+    log.info("[MEASUREMENT] %d rows -> data/raw/measurement.csv", len(measurement))
 
     note.to_csv(RAW_DIR / "note.csv", index=False)
-    print(f"[NOTE] {len(note):,} rows -> data/raw/note.csv")
+    log.info("[NOTE] %d rows -> data/raw/note.csv", len(note))
 
     total_rows = len(person) + len(visit) + len(condition) + len(drug) + len(measurement) + len(note)
-    print(f"[BUDGET] total rows written: {total_rows:,} (target budget ~{TOTAL_ROW_BUDGET:,})")
+    log.info("[BUDGET] total rows written: %d (target budget ~%d)", total_rows, TOTAL_ROW_BUDGET)
     if total_rows > TOTAL_ROW_BUDGET * 1.5:
-        print(f"[BUDGET] WARNING: total rows ({total_rows:,}) significantly exceed target budget ({TOTAL_ROW_BUDGET:,})")
+        log.warning("[BUDGET] total rows (%d) significantly exceed target budget (%d)", total_rows, TOTAL_ROW_BUDGET)
+
+    _write_manifest(person, visit, condition, drug, measurement, note)
 
 
 if __name__ == "__main__":

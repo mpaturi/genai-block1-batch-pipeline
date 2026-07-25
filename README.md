@@ -6,13 +6,9 @@ A Python/PySpark batch pipeline project built on a fully synthetic OMOP-style he
 
 This project demonstrates a production-ready healthcare data pipeline that takes raw synthetic patient data and transforms it into a clean, validated, analytics-ready dataset — the kind of foundation that healthcare organizations need before they can do anything useful with their data. It enforces data quality at every step: detecting nulls, duplicates, orphaned records, and out-of-range values, then cleaning them systematically with full before-and-after traceability. The output — a single patient-level table with visit counts, chronic condition flags, and latest lab values — is the building block for clinical analytics like population health management, risk stratification, and care gap identification. By using OMOP-style conventions, the pipeline speaks the same language as industry-standard research networks (OHDSI), making it portable across health systems. The deterministic, seed-based design means results are fully reproducible, which is critical for regulatory and audit requirements in healthcare. In short, it solves the unglamorous but essential problem that most health data projects fail on: getting messy clinical data into a trustworthy, queryable shape before any analytics or AI can begin.
 
-## Data flow
-
-![Data Flow](docs/data_flow.png)
-
 ## Architecture
 
-![Pipeline Architecture](docs/architecture.png)
+![Architecture](docs/architecture.svg)
 
 ## Output dataset
 
@@ -29,15 +25,11 @@ The pipeline produces a patient-level analytics table (`analytic_person`) with o
 
 Written as partitioned Parquet under `data/processed/`, partitioned by `year_of_birth_band`.
 
-### Joins and aggregations
+### Building analytic_person
 
-![Join Diagram](docs/join_diagram.png)
+![Building analytic_person](docs/analytic_person.svg)
 
-Each clinical table is aggregated by `person_id`, then left-joined onto PERSON to produce one row per person.
-
-### Aggregations
-
-![Aggregation Diagram](docs/aggregation_diagram.png)
+Each clinical table is aggregated by `person_id`, then left-joined sequentially onto PERSON to produce one row per person.
 
 ## Scope
 
@@ -45,7 +37,7 @@ Block 1 includes:
 - project documentation (`spec.md`, `plan.md`, `tasks.md`)
 - synthetic OMOP-style data design and generation via Synthea
 - a PySpark batch pipeline with validation, cleaning, and transformation
-- 103 tests with `pytest`
+- 102 tests with `pytest`
 - a demo notebook
 
 Block 1 does not include:
@@ -62,14 +54,14 @@ Block 1 does not include:
 - pandas (data generation)
 - pytest
 - Jupyter Notebook / JupyterLab
-- Java 11+ (Synthea only)
+- Java 21 LTS (Synthea only)
 
 ## Project structure
 
 ```text
 docs/           project specification, plan, and tasks
 src/            pipeline modules and helper code
-tests/          pytest-based tests (103 tests)
+tests/          pytest-based tests (102 tests)
 notebooks/      demo notebook (demo.ipynb)
 scripts/        utility scripts (run_all.py)
 data/synthea_raw/  raw Synthea CSV export (git-ignored)
@@ -113,6 +105,19 @@ pytest
 jupyter notebook notebooks/demo.ipynb
 ```
 
+### Environment variable overrides
+
+These are optional — defaults work out of the box for this project's local dev setup. Override them if you're running on a different machine or want a different population/seed without editing `src/config.py`.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `BLOCK1_JAVA21_HOME` | Local Java 21 install path | Point Spark at a Java 21 JDK (required — PySpark is incompatible with Java 25+) |
+| `BLOCK1_HADOOP_HOME` | `~/hadoop` | Hadoop native libs location (Windows only) |
+| `BLOCK1_RANDOM_SEED` | `42` | Override the generator's random seed |
+| `BLOCK1_REFERENCE_DATE` | `2025-01-01` | Override the "as of" date used for age calculation |
+
+`scripts/run_all.py --seed`/`--reference-date` set the latter two automatically to match what Synthea was run with.
+
 ## Expected row counts
 
 Data is generated with a fixed seed (`RANDOM_SEED=42`), so row counts are deterministic. After running the pipeline, your `data/processed/pipeline_metrics.json` should match these counts exactly.
@@ -144,13 +149,13 @@ Rows can fail multiple checks, so individual violation counts may exceed the tot
 
 ## Tests
 
-103 tests across 3 test files, all run with `pytest` against in-memory Spark DataFrames.
+102 tests across 3 test files, all run with `pytest` against in-memory Spark DataFrames.
 
 | File | Tests | What it covers |
 |---|---:|---|
 | `test_validations.py` | 50 | One test per validation check per table — null checks, duplicate PK, bad dates, negative values, orphan FKs, plus edge cases (e.g., null end date is allowed). Also tests `validate_all` aggregation. |
 | `test_transforms.py` | 45 | Cleaning functions for all 6 tables — verifies each drop rule (nulls, bad dates, negatives, orphans, duplicates) and edge cases (e.g., zero `days_supply` is kept, null optional FKs are kept). Also tests `clean_all` before/after metrics and `build_analytic_person` — age calculation, decade band, visit count aggregation, condition flags, latest measurement values, and null handling for persons with no data. |
-| `test_pipeline.py` | 8 | Pipeline orchestration — `PipelineValidationError` type, hard gate pass/fail behavior, error message content, and validation logging (warnings on violations, silence on clean data, stage name in log output). |
+| `test_pipeline.py` | 7 | Pipeline orchestration — `PipelineValidationError` type, hard gate pass/fail behavior, error message content, and validation logging (warnings on violations, silence on clean data, stage name in log output). |
 
 ### Test categories
 
@@ -162,7 +167,7 @@ Rows can fail multiple checks, so individual violation counts may exceed the tot
 | Negative values | 8 | Negative `days_supply`, `quantity`, `value_as_number` are dropped; zero is kept |
 | Orphan FK | 7 | Orphan `person_id` and `visit_occurrence_id` are dropped; null FKs are kept |
 | Aggregation | 10 | Visit counts by type, condition flags, latest HbA1c/BP, zero counts for persons with no data |
-| Pipeline | 8 | Hard gate pass/fail, error message content, logging behavior |
+| Pipeline | 7 | Hard gate pass/fail, error message content, logging behavior |
 | Integration | 3 | `validate_all` combines results, `clean_all` returns correct metrics |
 
 All tests use in-memory Spark DataFrames with minimal fixture data — no files on disk are needed.
@@ -193,4 +198,4 @@ Block 1 was built across 13 phases (0–12), each delivered as a separate branch
 
 ## Status
 
-Block 1 is complete. All phases have been merged, 103 tests pass, and the demo notebook runs end-to-end. Later blocks may expand the schema, increase scale, and introduce more advanced engineering concerns.
+Block 1 is complete. All phases have been merged, 102 tests pass, and the demo notebook runs end-to-end. Later blocks may expand the schema, increase scale, and introduce more advanced engineering concerns.

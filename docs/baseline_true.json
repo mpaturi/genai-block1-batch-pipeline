@@ -1,30 +1,30 @@
 {
   "row_counts": {
     "raw": {
-      "person": 11770,
-      "visit_occurrence": 23541,
-      "condition_occurrence": 5037,
-      "drug_exposure": 4564,
+      "person": 11784,
+      "visit_occurrence": 23568,
+      "condition_occurrence": 5055,
+      "drug_exposure": 4596,
       "measurement": 24431,
-      "note": 46729
+      "note": 46781
     },
     "cleaned": {
-      "person": 11424,
-      "visit_occurrence": 22175,
-      "condition_occurrence": 4817,
-      "drug_exposure": 4223,
-      "measurement": 22639,
-      "note": 22847
+      "person": 11436,
+      "visit_occurrence": 22196,
+      "condition_occurrence": 4836,
+      "drug_exposure": 4258,
+      "measurement": 22663,
+      "note": 22872
     },
     "dropped": {
-      "person": 346,
-      "visit_occurrence": 1366,
-      "condition_occurrence": 220,
-      "drug_exposure": 341,
-      "measurement": 1792,
-      "note": 23882
+      "person": 348,
+      "visit_occurrence": 1372,
+      "condition_occurrence": 219,
+      "drug_exposure": 338,
+      "measurement": 1768,
+      "note": 23909
     },
-    "analytic_person": 11424
+    "analytic_person": 11436
   },
   "validation": {
     "raw": [
@@ -36,7 +36,7 @@
       {
         "table": "person",
         "check": "null_year_of_birth",
-        "violations": 176
+        "violations": 177
       },
       {
         "table": "person",
@@ -51,7 +51,7 @@
       {
         "table": "person",
         "check": "dup_pk",
-        "violations": 173
+        "violations": 174
       },
       {
         "table": "visit_occurrence",
@@ -61,7 +61,7 @@
       {
         "table": "visit_occurrence",
         "check": "null_visit_concept_id",
-        "violations": 352
+        "violations": 353
       },
       {
         "table": "visit_occurrence",
@@ -86,7 +86,7 @@
       {
         "table": "visit_occurrence",
         "check": "dup_pk",
-        "violations": 347
+        "violations": 348
       },
       {
         "table": "condition_occurrence",
@@ -96,7 +96,7 @@
       {
         "table": "condition_occurrence",
         "check": "null_condition_concept_id",
-        "violations": 75
+        "violations": 76
       },
       {
         "table": "condition_occurrence",
@@ -141,7 +141,7 @@
       {
         "table": "drug_exposure",
         "check": "bad_date_drug_exposure_end_date",
-        "violations": 78
+        "violations": 75
       },
       {
         "table": "drug_exposure",
@@ -186,7 +186,7 @@
       {
         "table": "measurement",
         "check": "orphan_person_id",
-        "violations": 363
+        "violations": 364
       },
       {
         "table": "measurement",
@@ -201,12 +201,12 @@
       {
         "table": "note",
         "check": "null_note_date",
-        "violations": 23188
+        "violations": 23213
       },
       {
         "table": "note",
         "check": "null_note_text",
-        "violations": 23541
+        "violations": 23568
       },
       {
         "table": "note",
@@ -216,7 +216,7 @@
       {
         "table": "note",
         "check": "dup_pk",
-        "violations": 23534
+        "violations": 23560
       }
     ],
     "cleaned": [
@@ -413,10 +413,10 @@
     ]
   },
   "timings_seconds": {
-    "validation_raw": 15.71,
-    "cleaning": 5.68,
-    "validation_cleaned": 10.7,
-    "build_and_write": 6.06,
-    "total": 40.68
+    "validation_raw": 16.32,
+    "cleaning": 6.11,
+    "validation_cleaned": 11.69,
+    "build_and_write": 6.63,
+    "total": 43.61
   }
 }

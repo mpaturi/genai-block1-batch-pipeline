@@ -26,7 +26,9 @@ from dataclasses import dataclass
 
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
+from pyspark.sql.types import StructType
 
+from src import schemas
 from src.concepts import (
     CONDITION_DIABETES,
     CONDITION_HYPERTENSION,
@@ -188,6 +190,22 @@ def clean_all(
 # analytic_person build
 # ---------------------------------------------------------------------------
 
+def _assert_matches_schema(df: DataFrame, expected: StructType, label: str) -> None:
+    """Fail loudly if analytic_person's actual columns/types drift from schemas.py."""
+    actual = {f.name: f.dataType for f in df.schema.fields}
+    expected_fields = {f.name: f.dataType for f in expected.fields}
+    missing = expected_fields.keys() - actual.keys()
+    extra = actual.keys() - expected_fields.keys()
+    mismatched = {
+        name for name in actual.keys() & expected_fields.keys()
+        if actual[name] != expected_fields[name]
+    }
+    if missing or extra or mismatched:
+        raise ValueError(
+            f"{label} schema mismatch — missing={missing} extra={extra} type_mismatches={mismatched}"
+        )
+
+
 def build_analytic_person(
     person: DataFrame,
     visit: DataFrame,
@@ -259,7 +277,7 @@ def build_analytic_person(
     )
 
     # --- assemble -----------------------------------------------------------
-    return (
+    result = (
         person
         .withColumn("age", F.lit(ref_year) - F.col("year_of_birth"))
         .withColumn("year_of_birth_band", year_band)
@@ -288,3 +306,5 @@ def build_analytic_person(
             "latest_measurement_date",
         )
     )
+    _assert_matches_schema(result, schemas.ANALYTIC_PERSON, "analytic_person")
+    return result

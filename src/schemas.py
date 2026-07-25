@@ -77,6 +77,7 @@ NOTE = StructType([
 ANALYTIC_PERSON = StructType([
     StructField("person_id", IntegerType(), nullable=False),
     StructField("age", IntegerType(), nullable=False),
+    StructField("year_of_birth_band", StringType(), nullable=False),
     StructField("gender_concept_id", IntegerType(), nullable=False),
     StructField("total_visit_count", LongType(), nullable=False),
     StructField("outpatient_visit_count", LongType(), nullable=False),
