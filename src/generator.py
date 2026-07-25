@@ -10,7 +10,17 @@ import random
 
 import pandas as pd
 
-from src.config import DIRTY_DATA_FRACTION, RANDOM_SEED, RAW_DIR, SYNTHEA_RAW_DIR, VISITS_PER_PERSON
+from src.config import (
+    DEFAULT_DAYS_SUPPLY,
+    DEFAULT_QUANTITY,
+    DIRTY_DATA_FRACTION,
+    MIN_DAYS_SUPPLY,
+    RANDOM_SEED,
+    RAW_DIR,
+    SYNTHEA_RAW_DIR,
+    TOTAL_ROW_BUDGET,
+    VISITS_PER_PERSON,
+)
 from src.concepts import (
     CONDITION_CONCEPT_ID,
     DRUG_CONCEPT_ID,
@@ -22,23 +32,24 @@ from src.concepts import (
     VISIT_CONCEPT_ID,
 )
 
-# UUID → int maps and included-encounter set shared across all table mappers
-_person_id_map: dict[str, int] = {}
-_visit_id_map: dict[str, int] = {}
-_included_encounter_uuids: set[str] = set()
-
-
 def _csv(name: str) -> pd.DataFrame:
     """Read a Synthea CSV by table name (no extension)."""
-    return pd.read_csv(SYNTHEA_RAW_DIR / "csv" / f"{name}.csv", dtype=str)
+    path = SYNTHEA_RAW_DIR / "csv" / f"{name}.csv"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Expected Synthea export not found: {path}\n"
+            f"Run Synthea first (see scripts/run_all.py) to populate data/synthea_raw/csv/."
+        )
+    return pd.read_csv(path, dtype=str)
 
 
-def _map_person() -> pd.DataFrame:
-    global _person_id_map
+def _map_person() -> tuple[pd.DataFrame, dict[str, int]]:
+    """Map PERSON. Returns the table plus person_id_map (Synthea UUID -> int),
+    which downstream tables need to resolve their own person_id foreign keys."""
     df = _csv("patients")
 
-    _person_id_map = {uuid: i + 1 for i, uuid in enumerate(df["Id"])}
-    df["person_id"] = df["Id"].map(_person_id_map).astype(int)
+    person_id_map = {uuid: i + 1 for i, uuid in enumerate(df["Id"])}
+    df["person_id"] = df["Id"].map(person_id_map).astype(int)
     df["gender_concept_id"] = df["GENDER"].map(GENDER_CONCEPT_ID)
     df["race_concept_id"] = df["RACE"].str.lower().map(RACE_CONCEPT_ID)
     df["ethnicity_concept_id"] = df["ETHNICITY"].str.lower().map(ETHNICITY_CONCEPT_ID)
@@ -54,15 +65,18 @@ def _map_person() -> pd.DataFrame:
     for col in ["gender_concept_id", "race_concept_id", "ethnicity_concept_id"]:
         df[col] = df[col].astype(int)
 
-    return df[["person_id", "gender_concept_id", "year_of_birth",
-               "race_concept_id", "ethnicity_concept_id", "location_id"]].copy()
+    person = df[["person_id", "gender_concept_id", "year_of_birth",
+                 "race_concept_id", "ethnicity_concept_id", "location_id"]].copy()
+    return person, person_id_map
 
 
-def _map_visit_occurrence() -> pd.DataFrame:
-    global _visit_id_map, _included_encounter_uuids
+def _map_visit_occurrence(person_id_map: dict[str, int]) -> tuple[pd.DataFrame, dict[str, int], set[str]]:
+    """Map VISIT_OCCURRENCE. Returns the table plus visit_id_map and the set of
+    encounter UUIDs kept after the per-person visit cap — both needed by the
+    condition/drug/measurement mappers below to filter to included encounters."""
     df = _csv("encounters")
 
-    df["person_id"] = df["PATIENT"].map(_person_id_map)
+    df["person_id"] = df["PATIENT"].map(person_id_map)
     df["visit_concept_id"] = df["ENCOUNTERCLASS"].str.lower().map(VISIT_CONCEPT_ID)
     df["visit_start_date"] = pd.to_datetime(df["START"]).dt.date
     df["visit_end_date"] = pd.to_datetime(df["STOP"]).dt.date
@@ -84,27 +98,28 @@ def _map_visit_occurrence() -> pd.DataFrame:
     )
     print(f"[VISIT_OCCURRENCE] capped to {VISITS_PER_PERSON} visits/person: {len(df):,} rows retained")
 
-    _included_encounter_uuids = set(df["Id"])
-    _visit_id_map = {uuid: i + 1 for i, uuid in enumerate(df["Id"])}
+    included_encounter_uuids = set(df["Id"])
+    visit_id_map = {uuid: i + 1 for i, uuid in enumerate(df["Id"])}
 
-    df["visit_occurrence_id"] = df["Id"].map(_visit_id_map).astype(int)
+    df["visit_occurrence_id"] = df["Id"].map(visit_id_map).astype(int)
     for col in ["visit_occurrence_id", "person_id", "visit_concept_id"]:
         df[col] = df[col].astype(int)
 
-    return df[["visit_occurrence_id", "person_id", "visit_concept_id",
-               "visit_start_date", "visit_end_date",
-               "care_site_id", "provider_id"]].copy()
+    visit = df[["visit_occurrence_id", "person_id", "visit_concept_id",
+                "visit_start_date", "visit_end_date",
+                "care_site_id", "provider_id"]].copy()
+    return visit, visit_id_map, included_encounter_uuids
 
 
-def _map_condition_occurrence() -> pd.DataFrame:
+def _map_condition_occurrence(person_id_map: dict[str, int], visit_id_map: dict[str, int]) -> pd.DataFrame:
     df = _csv("conditions")
 
     # Whitelist filter — drop any SNOMED code not in our 3-condition dict
     df["condition_concept_id"] = df["CODE"].map(CONDITION_CONCEPT_ID)
     df = df.dropna(subset=["condition_concept_id"])
 
-    df["person_id"] = df["PATIENT"].map(_person_id_map)
-    df["visit_occurrence_id"] = df["ENCOUNTER"].map(_visit_id_map).astype("Int64")
+    df["person_id"] = df["PATIENT"].map(person_id_map)
+    df["visit_occurrence_id"] = df["ENCOUNTER"].map(visit_id_map).astype("Int64")
     df["condition_start_date"] = pd.to_datetime(df["START"], errors="coerce").dt.date
     df["condition_end_date"] = pd.to_datetime(df["STOP"], errors="coerce").dt.date
 
@@ -124,26 +139,26 @@ def _map_condition_occurrence() -> pd.DataFrame:
                "visit_occurrence_id"]].copy()
 
 
-def _map_drug_exposure() -> pd.DataFrame:
+def _map_drug_exposure(person_id_map: dict[str, int], included_encounter_uuids: set[str]) -> pd.DataFrame:
     df = _csv("medications")
 
     # Keep only medications from visits included in the visit cap
-    df = df[df["ENCOUNTER"].isin(_included_encounter_uuids)]
+    df = df[df["ENCOUNTER"].isin(included_encounter_uuids)]
 
     # Whitelist filter — drop any RxNorm code not in our 6-drug dict
     df["drug_concept_id"] = df["CODE"].map(DRUG_CONCEPT_ID)
     df = df.dropna(subset=["drug_concept_id"])
 
-    df["person_id"] = df["PATIENT"].map(_person_id_map)
+    df["person_id"] = df["PATIENT"].map(person_id_map)
     df["drug_exposure_start_date"] = pd.to_datetime(df["START"], errors="coerce").dt.date
     df["drug_exposure_end_date"] = pd.to_datetime(df["STOP"], errors="coerce").dt.date
 
     # days_supply: derive from date diff; clamp to minimum 1 to avoid 0-day dispenses
     start_dt = pd.to_datetime(df["START"], errors="coerce")
     stop_dt = pd.to_datetime(df["STOP"], errors="coerce")
-    df["days_supply"] = (stop_dt - start_dt).dt.days.fillna(30).clip(lower=1).astype(int)
+    df["days_supply"] = (stop_dt - start_dt).dt.days.fillna(DEFAULT_DAYS_SUPPLY).clip(lower=MIN_DAYS_SUPPLY).astype(int)
 
-    df["quantity"] = pd.to_numeric(df["DISPENSES"], errors="coerce").fillna(1.0)
+    df["quantity"] = pd.to_numeric(df["DISPENSES"], errors="coerce").fillna(DEFAULT_QUANTITY)
 
     before = len(df)
     df = df.dropna(subset=["person_id", "drug_exposure_start_date"])
@@ -161,18 +176,22 @@ def _map_drug_exposure() -> pd.DataFrame:
                "days_supply", "quantity"]].copy()
 
 
-def _map_measurement() -> pd.DataFrame:
+def _map_measurement(
+    person_id_map: dict[str, int],
+    visit_id_map: dict[str, int],
+    included_encounter_uuids: set[str],
+) -> pd.DataFrame:
     df = _csv("observations")
 
     # Keep only observations from visits included in the visit cap
-    df = df[df["ENCOUNTER"].isin(_included_encounter_uuids)]
+    df = df[df["ENCOUNTER"].isin(included_encounter_uuids)]
 
     # Whitelist filter — keep only our 5 LOINC codes
     df["measurement_concept_id"] = df["CODE"].map(MEASUREMENT_CONCEPT_ID)
     df = df.dropna(subset=["measurement_concept_id"])
 
-    df["person_id"] = df["PATIENT"].map(_person_id_map)
-    df["visit_occurrence_id"] = df["ENCOUNTER"].map(_visit_id_map).astype("Int64")
+    df["person_id"] = df["PATIENT"].map(person_id_map)
+    df["visit_occurrence_id"] = df["ENCOUNTER"].map(visit_id_map).astype("Int64")
     df["measurement_date"] = pd.to_datetime(df["DATE"], errors="coerce").dt.date
     df["value_as_number"] = pd.to_numeric(df["VALUE"], errors="coerce")
     # unit_concept_id is nullable — unmatched units stay null, row is kept
@@ -330,12 +349,12 @@ def generate() -> None:
     """Build all 6 raw tables, inject dirty data, and write CSVs to data/raw/."""
     RAW_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Map clean tables (order matters: _person_id_map/_visit_id_map populate first)
-    person      = _map_person()
-    visit       = _map_visit_occurrence()
-    condition   = _map_condition_occurrence()
-    drug        = _map_drug_exposure()
-    measurement = _map_measurement()
+    # Map clean tables (order matters: person_id_map/visit_id_map feed downstream mappers)
+    person, person_id_map = _map_person()
+    visit, visit_id_map, included_encounter_uuids = _map_visit_occurrence(person_id_map)
+    condition   = _map_condition_occurrence(person_id_map, visit_id_map)
+    drug        = _map_drug_exposure(person_id_map, included_encounter_uuids)
+    measurement = _map_measurement(person_id_map, visit_id_map, included_encounter_uuids)
     note        = _map_note(visit)
 
     # Inject dirty rows/values
@@ -361,6 +380,11 @@ def generate() -> None:
 
     note.to_csv(RAW_DIR / "note.csv", index=False)
     print(f"[NOTE] {len(note):,} rows -> data/raw/note.csv")
+
+    total_rows = len(person) + len(visit) + len(condition) + len(drug) + len(measurement) + len(note)
+    print(f"[BUDGET] total rows written: {total_rows:,} (target budget ~{TOTAL_ROW_BUDGET:,})")
+    if total_rows > TOTAL_ROW_BUDGET * 1.5:
+        print(f"[BUDGET] WARNING: total rows ({total_rows:,}) significantly exceed target budget ({TOTAL_ROW_BUDGET:,})")
 
 
 if __name__ == "__main__":

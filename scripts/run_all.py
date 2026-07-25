@@ -6,18 +6,23 @@ Usage:
 """
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))  # allow `from src.config import ...` when run directly as a script
+
+from src.config import NUM_PERSONS  # noqa: E402 (must come after the sys.path fix above)
+
 JAR_PATH = PROJECT_ROOT / "tools" / "synthea-with-dependencies.jar"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "synthea_raw"
 
 
-def _run(description, cmd):
+def _run(description, cmd, env=None):
     print(f"\n=== {description} ===")
-    result = subprocess.run(cmd, cwd=PROJECT_ROOT)
+    result = subprocess.run(cmd, cwd=PROJECT_ROOT, env=env)
     if result.returncode != 0:
         print(f"FAILED: {description} (exit code {result.returncode})")
         sys.exit(result.returncode)
@@ -25,7 +30,7 @@ def _run(description, cmd):
 
 def main():
     parser = argparse.ArgumentParser(description="Run full Block 1 pipeline end-to-end")
-    parser.add_argument("--population", type=int, default=10000)
+    parser.add_argument("--population", type=int, default=NUM_PERSONS)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--reference-date", default="20250101")
     args = parser.parse_args()
@@ -49,13 +54,21 @@ def main():
         f"--exporter.baseDirectory={OUTPUT_DIR}",
     ])
 
+    # Propagate --seed/--reference-date to the generator/pipeline subprocesses,
+    # so they match what Synthea actually used instead of config.py's defaults.
+    child_env = os.environ.copy()
+    child_env["BLOCK1_RANDOM_SEED"] = str(args.seed)
+    child_env["BLOCK1_REFERENCE_DATE"] = (
+        f"{args.reference_date[:4]}-{args.reference_date[4:6]}-{args.reference_date[6:8]}"
+    )
+
     _run("Step 2/3: Running generator (Synthea CSV -> data/raw/)", [
         sys.executable, "-m", "src.generator",
-    ])
+    ], env=child_env)
 
     _run("Step 3/3: Running pipeline (validate -> clean -> transform -> data/processed/)", [
         sys.executable, "-m", "src.pipeline",
-    ])
+    ], env=child_env)
 
     print("\n=== All steps completed successfully ===")
 
