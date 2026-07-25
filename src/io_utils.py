@@ -6,6 +6,7 @@ under data/processed/.
 """
 
 import os
+import platform  # used below to pick Spark's native writer (Mac/Linux) vs the pandas/pyarrow fallback (Windows)
 from pathlib import Path
 
 from pyspark.sql import DataFrame, SparkSession
@@ -108,7 +109,6 @@ def write_parquet(
     Parquet file layouts (naming, _SUCCESS marker) for the same logical data,
     since one is Spark's writer and the other is PyArrow's.
     """
-    import platform
     if platform.system() == "Windows":
         _write_parquet_pandas(df, path, partition_by, mode)
     else:
