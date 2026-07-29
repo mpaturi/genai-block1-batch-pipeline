@@ -163,7 +163,7 @@ Generation rules will aim for internal consistency and basic realism, not medica
 
 Examples of synthetic concept families:
 - visit types: outpatient, inpatient, ER
-- chronic conditions: diabetes, hypertension, hyperlipidemia
+- chronic conditions: diabetes, hypertension, hyperlipidemia, anemia, osteoporosis, chronic congestive heart failure, atrial fibrillation, streptococcal sore throat, acute infective cystitis (UTI), acute pulmonary embolism, osteoarthritis of knee
 - measurements: systolic blood pressure, BMI, glucose, HbA1c
 
 ### Concept ID mapping
@@ -180,7 +180,7 @@ Synthea's CSV export does not include free-text clinical notes. `src/generator.p
 
 ### Target scale
 
-`src/generator.py` targets roughly 10,000 PERSON rows, tuned so the combined row count across all six tables stays under roughly 100,000.
+`src/generator.py` targets roughly 10,000 PERSON rows, tuned so the combined row count across all six tables stays close to 100,000; generator.py only logs a warning if the total exceeds 1.5x that target (150,000).
 
 ## Analytic output
 
