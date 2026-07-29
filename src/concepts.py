@@ -81,6 +81,23 @@ CONDITION_CONCEPT_ID = {
     "239873007": CONDITION_OSTEOARTHRITIS,  # Osteoarthritis of knee (disorder)
 }
 
+# Human-readable condition names for note generation (src/generator.py).
+# Keyed by the same synthetic condition_concept_id values as CONDITION_CONCEPT_ID
+# above, so a new condition only ever needs to be added in this one file.
+CONDITION_NAMES = {
+    CONDITION_DIABETES: "type 2 diabetes",
+    CONDITION_HYPERTENSION: "hypertension",
+    CONDITION_HYPERLIPIDEMIA: "hyperlipidemia",
+    CONDITION_ANEMIA: "anemia",
+    CONDITION_OSTEOPOROSIS: "osteoporosis",
+    CONDITION_CHF: "congestive heart failure",
+    CONDITION_AFIB: "atrial fibrillation",
+    CONDITION_STREP_THROAT: "streptococcal pharyngitis",
+    CONDITION_UTI: "a urinary tract infection",
+    CONDITION_PULMONARY_EMBOLISM: "a pulmonary embolism",
+    CONDITION_OSTEOARTHRITIS: "osteoarthritis",
+}
+
 # --- DRUG_EXPOSURE -----------------------------------------------------------
 
 # medications.csv CODE (RxNorm), linked via REASONCODE to CONDITION_CONCEPT_ID above
@@ -103,6 +120,17 @@ DRUG_CONCEPT_ID = {
     "1648755": 15, # Nitrofurantoin (UTI)
     "854252": 16,  # Enoxaparin (pulmonary embolism)
     "849574": 17,  # Naproxen sodium (osteoarthritis)
+}
+
+# Human-readable drug names for note generation (src/generator.py). Keyed by
+# the same synthetic drug_concept_id values as DRUG_CONCEPT_ID above, so a
+# new drug only ever needs to be added in this one file.
+DRUG_NAMES = {
+    1: "Metformin", 2: "insulin", 3: "Lisinopril", 4: "Amlodipine",
+    5: "Hydrochlorothiazide", 6: "Simvastatin", 7: "Epoetin Alfa",
+    8: "Alendronic acid", 9: "Furosemide", 10: "Carvedilol",
+    11: "Digoxin", 12: "Warfarin", 13: "Penicillin V",
+    14: "Ciprofloxacin", 15: "Nitrofurantoin", 16: "Enoxaparin", 17: "Naproxen",
 }
 
 # --- MEASUREMENT --------------------------------------------------------------

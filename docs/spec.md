@@ -176,7 +176,9 @@ Synthea's raw CSV export (`data/synthea_raw/`) identifies patients, encounters, 
 
 ### NOTE generation
 
-Synthea's CSV export does not include free-text clinical notes. `src/generator.py` generates synthetic note text by randomly selecting from hardcoded complaint and assessment phrases keyed to the visit type (outpatient, inpatient, ER). Each visit produces one NOTE record with a `note_text` built from these canned strings. The remaining columns — `note_id` (sequential), `person_id`, `note_date` (from `visit_start_date`), and `visit_occurrence_id` — are derived directly from the mapped VISIT_OCCURRENCE rows.
+Synthea's CSV export does not include free-text clinical notes. `src/generator.py` generates synthetic note text from hardcoded phrase banks. For patients with at least one whitelisted condition, the note is assembled from randomly selected demographic (age/gender), condition, drug, and latest-lab phrases — condition and drug history are drawn from the patient's whole history (not just this visit, since `drug_exposure` has no visit link), and the lab is simply the most recent measurement on record, not bounded to on-or-before the visit date. Patients with no whitelisted condition fall back to the original generic template keyed only to visit type (outpatient, inpatient, ER). Each visit produces one NOTE record; the remaining columns — `note_id` (sequential), `person_id`, `note_date` (from `visit_start_date`), and `visit_occurrence_id` — are derived directly from the mapped VISIT_OCCURRENCE rows.
+
+Two known simplifications, acceptable for a synthetic RAG dataset but not clinically accurate: (1) since only each patient's 2 most recent visits are kept but condition/drug history spans their whole lifetime, a kept visit's note can reference a diagnosis/drug the patient didn't actually have yet as of that visit's date; (2) a condition diagnosed more than once (e.g. recurring UTIs) appears multiple times in the patient's condition list, giving it proportionally higher odds of being the one mentioned in the note.
 
 ### Target scale
 

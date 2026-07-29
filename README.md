@@ -37,7 +37,7 @@ Block 1 includes:
 - project documentation (`spec.md`, `plan.md`, `tasks.md`)
 - synthetic OMOP-style data design and generation via Synthea
 - a PySpark batch pipeline with validation, cleaning, and transformation
-- 102 tests with `pytest`
+- 104 tests with `pytest`
 - a demo notebook
 
 Block 1 does not include:
@@ -61,7 +61,7 @@ Block 1 does not include:
 ```text
 docs/           project specification, plan, and tasks
 src/            pipeline modules and helper code
-tests/          pytest-based tests (102 tests)
+tests/          pytest-based tests (104 tests)
 notebooks/      demo notebook (demo.ipynb)
 scripts/        utility scripts (run_all.py)
 data/synthea_raw/  raw Synthea CSV export (git-ignored)
@@ -151,13 +151,14 @@ Rows can fail multiple checks, so individual violation counts may exceed the tot
 
 ## Tests
 
-102 tests across 3 test files, all run with `pytest` against in-memory Spark DataFrames.
+104 tests across 4 test files, all run with `pytest` against in-memory Spark DataFrames.
 
 | File | Tests | What it covers |
 |---|---:|---|
 | `test_validations.py` | 50 | One test per validation check per table — null checks, duplicate PK, bad dates, negative values, orphan FKs, plus edge cases (e.g., null end date is allowed). Also tests `validate_all` aggregation. |
 | `test_transforms.py` | 45 | Cleaning functions for all 6 tables — verifies each drop rule (nulls, bad dates, negatives, orphans, duplicates) and edge cases (e.g., zero `days_supply` is kept, null optional FKs are kept). Also tests `clean_all` before/after metrics and `build_analytic_person` — age calculation, decade band, visit count aggregation, condition flags, latest measurement values, and null handling for persons with no data. |
 | `test_pipeline.py` | 7 | Pipeline orchestration — `PipelineValidationError` type, hard gate pass/fail behavior, error message content, and validation logging (warnings on violations, silence on clean data, stage name in log output). |
+| `test_concepts.py` | 2 | Consistency between the concept whitelist dicts and their name-lookup dicts — every `CONDITION_CONCEPT_ID`/`DRUG_CONCEPT_ID` value has a matching entry in `CONDITION_NAMES`/`DRUG_NAMES`. |
 
 ### Test categories
 
@@ -200,4 +201,4 @@ Block 1 was built across 13 phases (0–12), each delivered as a separate branch
 
 ## Status
 
-Block 1 is complete. All phases have been merged, 102 tests pass, and the demo notebook runs end-to-end. Later blocks may expand the schema, increase scale, and introduce more advanced engineering concerns.
+Block 1 is complete. All phases have been merged, 104 tests pass, and the demo notebook runs end-to-end. Later blocks may expand the schema, increase scale, and introduce more advanced engineering concerns.
