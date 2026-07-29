@@ -36,11 +36,6 @@ from src.concepts import (
     VISIT_CONCEPT_ID,
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(levelname)-8s  %(message)s",
-    datefmt="%H:%M:%S",
-)
 log = logging.getLogger(__name__)
 
 
@@ -441,4 +436,9 @@ def generate() -> None:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s  %(levelname)-8s  %(message)s",
+        datefmt="%H:%M:%S",
+    )
     generate()
